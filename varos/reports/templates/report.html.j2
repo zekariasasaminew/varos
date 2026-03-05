@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>VAROS Variant Classification Report</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11pt; color: #1a1a2e; background: #fff; padding: 30px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1a1a2e; padding-bottom: 15px; margin-bottom: 25px; }
+    .logo { font-size: 22pt; font-weight: 900; letter-spacing: -1px; color: #1a1a2e; }
+    .logo span { color: #4361ee; }
+    .report-meta { text-align: right; font-size: 9pt; color: #555; }
+    .variant-box { background: #f8f9ff; border: 1.5px solid #4361ee; border-radius: 8px; padding: 18px 22px; margin-bottom: 22px; }
+    .variant-hgvs { font-size: 15pt; font-weight: 700; font-family: 'Courier New', monospace; color: #1a1a2e; }
+    .variant-gene { font-size: 11pt; color: #555; margin-top: 4px; }
+    .classification-badge { display: inline-block; padding: 6px 18px; border-radius: 20px; font-weight: 700; font-size: 12pt; margin-top: 10px; }
+    .badge-pathogenic { background: #ff6b6b; color: white; }
+    .badge-likely_pathogenic { background: #ff9f43; color: white; }
+    .badge-vus { background: #feca57; color: #1a1a2e; }
+    .badge-likely_benign { background: #48dbfb; color: #1a1a2e; }
+    .badge-benign { background: #1dd1a1; color: white; }
+    .confidence-row { margin-top: 8px; font-size: 9pt; color: #666; }
+    .confidence-bar { display: inline-block; width: 120px; height: 8px; background: #eee; border-radius: 4px; vertical-align: middle; margin: 0 6px; }
+    .confidence-fill { height: 100%; border-radius: 4px; background: #4361ee; }
+    h2 { font-size: 12pt; font-weight: 700; color: #1a1a2e; border-bottom: 1px solid #ddd; padding-bottom: 6px; margin: 22px 0 12px; }
+    .summary-box { background: #f0f3ff; border-left: 4px solid #4361ee; padding: 14px 16px; border-radius: 0 6px 6px 0; font-size: 10.5pt; line-height: 1.6; margin-bottom: 20px; }
+    .criteria-table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+    .criteria-table th { background: #1a1a2e; color: white; padding: 8px 10px; text-align: left; font-weight: 600; }
+    .criteria-table td { padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+    .criteria-table tr:nth-child(even) { background: #f8f9ff; }
+    .badge-triggered { background: #ff6b6b; color: white; padding: 2px 8px; border-radius: 10px; font-size: 8.5pt; font-weight: 700; }
+    .badge-not-triggered { background: #ddd; color: #666; padding: 2px 8px; border-radius: 10px; font-size: 8.5pt; }
+    .direction-p { color: #c0392b; font-weight: 600; }
+    .direction-b { color: #16a085; font-weight: 600; }
+    .evidence-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 14px; margin-bottom: 12px; }
+    .evidence-card h3 { font-size: 10pt; font-weight: 700; color: #4361ee; margin-bottom: 6px; }
+    .evidence-card p { font-size: 10pt; line-height: 1.5; color: #333; }
+    .score-chip { display: inline-block; background: #f0f3ff; border: 1px solid #4361ee; color: #4361ee; padding: 2px 8px; border-radius: 10px; font-size: 9pt; font-family: monospace; margin: 2px; }
+    .patient-box { background: #e8f5e9; border: 1.5px solid #1dd1a1; border-radius: 8px; padding: 14px 18px; }
+    .patient-box p { font-size: 10.5pt; line-height: 1.6; }
+    .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 8.5pt; color: #888; text-align: center; }
+    .disclaimer { background: #fff8e1; border: 1px solid #ffe082; border-radius: 4px; padding: 10px; font-size: 9pt; color: #666; margin-top: 18px; }
+    .lit-item { font-size: 9pt; margin-bottom: 6px; }
+    .lit-pmid { font-weight: 700; color: #4361ee; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="logo">VAR<span>OS</span></div>
+      <div style="font-size:9pt; color:#888; margin-top:3px;">Variant Autonomous Reclassification & Observation System</div>
+    </div>
+    <div class="report-meta">
+      <div><strong>Report generated:</strong> {{ generated_at }}</div>
+      <div><strong>VAROS version:</strong> {{ result.varos_version }}</div>
+      <div><strong>Genome build:</strong> {{ result.genome_build }}</div>
+    </div>
+  </div>
+
+  <!-- Variant + Classification -->
+  <div class="variant-box">
+    <div class="variant-hgvs">{{ result.variant.hgvs_cdna }}</div>
+    {% if result.variant.hgvs_protein %}
+    <div class="variant-gene">{{ result.variant.hgvs_protein }} | Gene: <strong>{{ result.variant.gene_symbol }}</strong></div>
+    {% else %}
+    <div class="variant-gene">Gene: <strong>{{ result.variant.gene_symbol }}</strong></div>
+    {% endif %}
+    <div>
+      <span class="classification-badge badge-{{ result.classification.value | lower | replace(' ', '_') | replace('variant_of_uncertain_significance', 'vus') }}">
+        {{ result.classification.value }}
+      </span>
+    </div>
+    <div class="confidence-row">
+      Confidence: {{ result.confidence }}%
+      <span class="confidence-bar"><span class="confidence-fill" style="width:{{ result.confidence }}%"></span></span>
+      ACMG/AMP 2015 Guidelines
+    </div>
+  </div>
+
+  <!-- Clinical Summary -->
+  {% if result.llm_clinical_note %}
+  <h2>Clinical Summary</h2>
+  <div class="summary-box">{{ result.llm_clinical_note }}</div>
+  {% endif %}
+
+  <!-- ACMG Criteria -->
+  <h2>ACMG/AMP Evidence Criteria ({{ result.criteria_triggered | length }} triggered / {{ result.criteria_evaluated | length }} evaluated)</h2>
+  <table class="criteria-table">
+    <thead>
+      <tr>
+        <th>Criterion</th>
+        <th>Direction</th>
+        <th>Strength</th>
+        <th>Status</th>
+        <th>Evidence</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in result.criteria_evaluated %}
+      <tr>
+        <td><strong>{{ c.code }}</strong></td>
+        <td class="{% if c.direction.value == 'pathogenic' %}direction-p{% else %}direction-b{% endif %}">
+          {{ c.direction.value | capitalize }}
+        </td>
+        <td>{{ c.applied_strength.value | replace('_', ' ') | capitalize }}</td>
+        <td>
+          {% if c.triggered %}
+          <span class="badge-triggered">TRIGGERED</span>
+          {% else %}
+          <span class="badge-not-triggered">not met</span>
+          {% endif %}
+        </td>
+        <td>{{ c.evidence_text }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Evidence Cards -->
+  <h2>Evidence from Databases</h2>
+
+  {% if result.population_frequency %}
+  <div class="evidence-card">
+    <h3>🧬 Population Frequency ({{ result.population_frequency.source }})</h3>
+    {% if result.population_frequency.not_found %}
+    <p>Variant <strong>absent</strong> from gnomAD — very rare or novel variant.</p>
+    {% else %}
+    <p>
+      Global AF: <span class="score-chip">{{ "%.2e" % result.population_frequency.allele_frequency }}</span>
+      AC/AN: <span class="score-chip">{{ result.population_frequency.allele_count }}/{{ result.population_frequency.allele_number }}</span>
+      Homozygotes: <span class="score-chip">{{ result.population_frequency.homozygote_count }}</span>
+      PopMax: <span class="score-chip">{{ "%.2e" % result.population_frequency.popmax_af }} ({{ result.population_frequency.popmax_population }})</span>
+    </p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if result.clinvar_evidence and not result.clinvar_evidence.not_found %}
+  <div class="evidence-card">
+    <h3>🗂 ClinVar ({{ result.clinvar_evidence.gold_stars }}★ — {{ result.clinvar_evidence.review_status }})</h3>
+    <p>
+      Aggregate classification: <strong>{{ result.clinvar_evidence.aggregate_classification }}</strong>.
+      {{ result.clinvar_evidence.submissions | length }} submitter(s).
+      {% if result.clinvar_evidence.conflicting_interpretations %}<strong style="color:#e74c3c;">⚠ Conflicting interpretations present.</strong>{% endif %}
+    </p>
+  </div>
+  {% endif %}
+
+  {% if result.computational_scores %}
+  <div class="evidence-card">
+    <h3>🤖 Computational Predictions</h3>
+    <p>
+      {% if result.computational_scores.alphamissense_score is not none %}
+      AlphaMissense: <span class="score-chip">{{ "%.3f" % result.computational_scores.alphamissense_score }} ({{ result.computational_scores.alphamissense_class }})</span>
+      {% endif %}
+      {% if result.computational_scores.cadd_phred is not none %}
+      CADD phred: <span class="score-chip">{{ "%.1f" % result.computational_scores.cadd_phred }}</span>
+      {% endif %}
+      {% if result.computational_scores.spliceai_max_delta is not none %}
+      SpliceAI max Δ: <span class="score-chip">{{ "%.3f" % result.computational_scores.spliceai_max_delta }}</span>
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+
+  {% if result.literature_evidence and result.literature_evidence.total_papers > 0 %}
+  <div class="evidence-card">
+    <h3>📚 Literature ({{ result.literature_evidence.total_papers }} papers, {{ result.literature_evidence.functional_papers }} with functional evidence)</h3>
+    {% for paper in result.literature_evidence.papers[:5] %}
+    <div class="lit-item">
+      <span class="lit-pmid">PMID:{{ paper.pmid }}</span>
+      {% if paper.year %}({{ paper.year }}){% endif %}
+      — {{ paper.title[:120] }}{% if paper.title | length > 120 %}...{% endif %}
+      {% if paper.functional_evidence %}<span style="color:#1dd1a1; font-weight:700;"> ✓ functional data</span>{% endif %}
+    </div>
+    {% endfor %}
+    {% if result.literature_evidence.total_papers > 5 %}
+    <div class="lit-item" style="color:#888;">...and {{ result.literature_evidence.total_papers - 5 }} more papers.</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Patient Explanation -->
+  {% if result.llm_patient_note %}
+  <h2>Patient Explanation</h2>
+  <div class="patient-box">
+    <p>{{ result.llm_patient_note }}</p>
+  </div>
+  {% endif %}
+
+  <!-- Warnings -->
+  {% if result.warnings %}
+  <div class="disclaimer" style="border-color:#ff9f43; background:#fff8e1; margin-top:18px;">
+    <strong>⚠ Data collection notes:</strong>
+    {% for w in result.warnings %}<div>• {{ w }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="disclaimer">
+    <strong>DISCLAIMER:</strong> This report is generated by VAROS v{{ result.varos_version }} for research and clinical decision support purposes only.
+    Classifications are based on ACMG/AMP 2015 guidelines and available evidence at the time of analysis.
+    All classifications should be reviewed by a qualified clinical geneticist before clinical use.
+    Evidence is subject to change as new data becomes available.
+  </div>
+
+  <div class="footer">
+    VAROS — Variant Autonomous Reclassification & Observation System | varos.io
+  </div>
+</body>
+</html>
