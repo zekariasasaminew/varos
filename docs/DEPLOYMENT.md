@@ -65,42 +65,57 @@ Data is persisted in the `varos_data` Docker volume.
 
 ---
 
-## Option 3: Fly.io (Production)
+## Option 3: Fly.io (Production — Recommended)
 
-### Prerequisites
-- [Fly.io CLI](https://fly.io/docs/flyctl/installing/): `brew install flyctl` or `curl -L https://fly.io/install.sh | sh`
-- Fly.io account: `fly auth login`
+### Prerequisites (Windows)
+1. Install flyctl: `iwr https://fly.io/install.ps1 -useb | iex`
+2. Log in: `flyctl auth login` (opens browser)
+3. (Optional) Install gh CLI for auto-deploy wiring: `winget install GitHub.cli`
 
-### Steps
+### One-command deploy (PowerShell)
 
-```bash
-# 1. Clone and enter project
-git clone https://github.com/zekariasasaminew/varos.git
+```powershell
 cd varos
 
-# 2. Create Fly app (uses fly.toml)
-fly launch --name varos-api --region ord --no-deploy
+.\scripts\deploy.ps1 `
+  -AnthropicKey  "sk-ant-..." `
+  -NcbiEmail     "you@lab.edu" `
+  -SecretKey     "$(New-Guid)-$(New-Guid)"
 
-# 3. Set secrets (never commit these to git)
-fly secrets set \
+# Optional — add billing + email:
+.\scripts\deploy.ps1 `
+  -AnthropicKey         "sk-ant-..." `
+  -NcbiEmail            "you@lab.edu" `
+  -SecretKey            "your-32-char-random-string" `
+  -StripeSecretKey      "sk_live_..." `
+  -StripeWebhookSecret  "whsec_..." `
+  -StripeStarterPriceId "price_..." `
+  -StripeProPriceId     "price_..." `
+  -SendgridApiKey       "SG...." `
+  -SendgridFromEmail    "alerts@varos.io"
+```
+
+The script is **idempotent** — re-running it is safe and will skip already-created resources.
+
+It will:
+1. Verify you're logged in to Fly.io
+2. Create the app `varos-api` (skip if exists)
+3. Create a 3 GB persistent volume (skip if exists)
+4. Set all secrets
+5. Build & deploy (first build ~3-5 min)
+6. Health-check the live URL
+7. Wire `FLY_API_TOKEN` to GitHub for auto-deploy on push to `main`
+
+### Manual steps (Linux/macOS)
+
+```bash
+fly apps create varos-api
+fly volumes create varos_data --app varos-api --size 3 --region iad --yes
+fly secrets set --app varos-api \
   ANTHROPIC_API_KEY="sk-ant-..." \
   NCBI_EMAIL="you@lab.edu" \
-  NCBI_API_KEY="your_ncbi_key" \
-  STRIPE_SECRET_KEY="sk_live_..." \
-  STRIPE_WEBHOOK_SECRET="whsec_..." \
-  STRIPE_STARTER_PRICE_ID="price_..." \
-  STRIPE_PRO_PRICE_ID="price_..." \
-  SENDGRID_API_KEY="SG...." \
-  SENDGRID_FROM_EMAIL="alerts@varos.io"
-
-# 4. Create a persistent volume for SQLite DB
-fly volumes create varos_data --size 1 --region ord
-
-# 5. Deploy
-fly deploy
-
-# 6. Verify
-fly status
+  SECRET_KEY="$(openssl rand -hex 32)"
+fly deploy --app varos-api --config fly.toml
 curl https://varos-api.fly.dev/health
 ```
 
@@ -131,6 +146,8 @@ Set these environment variables in your platform's dashboard:
 | `SENDGRID_API_KEY` | SendGrid API key |
 | `SENDGRID_FROM_EMAIL` | Verified sender email |
 | `DATABASE_URL` | PostgreSQL connection string (see below) |
+| `CORS_ORIGINS` | Comma-separated allowed origins (default: `*`) |
+| `SECRET_KEY` | JWT signing secret — **use a strong random value** |
 
 **Start command:** `uvicorn varos.api.app:app --host 0.0.0.0 --port $PORT`
 
@@ -175,6 +192,7 @@ VAROS_ENV=production              # development | production
 VAROS_LOG_LEVEL=INFO
 VAROS_LLM_MODEL=claude-sonnet-4-6 # or gpt-4o
 SECRET_KEY=change-me-in-production
+CORS_ORIGINS=*                    # or "https://app.varos.io,https://varos.io"
 ```
 
 ---
@@ -185,7 +203,7 @@ The `/health` endpoint returns `200 OK` when the API is running:
 
 ```bash
 curl https://your-deployment.example.com/health
-# {"status":"ok","version":"0.1.0","llm_available":true,"timestamp":"..."}
+# {"status":"ok","version":"0.1.0","env":"production","llm_available":true,"billing_available":true,"timestamp":"..."}
 ```
 
 Configure your load balancer / uptime monitor to hit this endpoint every 30s.
@@ -205,4 +223,4 @@ pytest tests/test_combiner.py tests/test_acmg.py -v
 pytest tests/test_api.py -v
 ```
 
-Expected: **42 tests passing**
+Expected: **103 tests passing**
