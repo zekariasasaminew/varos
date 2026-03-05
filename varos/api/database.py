@@ -7,7 +7,7 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 
 from varos.config import settings
 
-# Derive sync SQLite URL from the aiosqlite URL stored in settings
+# Normalize URL: accept both sqlite:/// and sqlite+aiosqlite:/// from env
 _db_url = settings.database_url.replace("sqlite+aiosqlite:///", "sqlite:///")
 
 engine = create_engine(_db_url, connect_args={"check_same_thread": False})

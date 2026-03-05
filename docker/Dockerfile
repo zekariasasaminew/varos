@@ -16,17 +16,22 @@ RUN pip install --no-cache-dir -e .
 # Copy source
 COPY varos/ ./varos/
 
-# Create data directory for SQLite + AlphaMissense index
+# /data is the Fly.io persistent volume mount point.
+# SQLite DB lives at /data/varos.db
+# AlphaMissense cache lives at /data/.varos/data (if pre-loaded)
 RUN mkdir -p /data/.varos/data
 
 ENV VAROS_ENV=production \
     DATABASE_URL=sqlite:////data/varos.db \
+    VAROS_DATA_DIR=/data/.varos/data \
+    HOME=/data \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
 
-CMD ["uvicorn", "varos.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# Single worker — 1GB Fly.io shared VM; scale horizontally not vertically
+CMD ["uvicorn", "varos.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
