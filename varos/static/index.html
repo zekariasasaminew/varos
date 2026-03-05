@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VAROS — Variant Autonomous Reclassification & Observation System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .gradient-bg { background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%); }
+    .card-glow { box-shadow: 0 0 30px rgba(59, 130, 246, 0.15); }
+    .badge-pathogenic { background: #fee2e2; color: #991b1b; }
+    .badge-lp { background: #ffedd5; color: #9a3412; }
+    .badge-vus { background: #fef9c3; color: #854d0e; }
+    .badge-lb { background: #cffafe; color: #155e75; }
+    .badge-benign { background: #dcfce7; color: #166534; }
+    pre { white-space: pre-wrap; word-wrap: break-word; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans">
+
+  <!-- Nav -->
+  <nav class="border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">🧬</span>
+      <span class="text-xl font-bold text-blue-400">VAROS</span>
+      <span class="text-xs bg-blue-900/60 text-blue-300 px-2 py-0.5 rounded-full ml-1">v0.1 beta</span>
+    </div>
+    <div class="flex items-center gap-6 text-sm text-slate-400">
+      <a href="#how" class="hover:text-white transition">How it works</a>
+      <a href="#demo" class="hover:text-white transition">Live demo</a>
+      <a href="#pricing" class="hover:text-white transition">Pricing</a>
+      <a href="/docs" class="hover:text-white transition">API docs</a>
+      <a href="#get-started" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg transition font-medium">Get API key</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="gradient-bg px-6 py-24 text-center">
+    <div class="max-w-4xl mx-auto">
+      <div class="inline-block bg-blue-900/40 text-blue-300 text-sm px-4 py-1.5 rounded-full mb-6 border border-blue-800/50">
+        🔬 Powered by ClinVar · gnomAD · AlphaMissense · PubMed · SpliceAI + AI
+      </div>
+      <h1 class="text-5xl font-bold mb-6 leading-tight">
+        Classify any genetic variant<br/>
+        <span class="text-blue-400">in under 30 seconds</span>
+      </h1>
+      <p class="text-xl text-slate-300 mb-8 max-w-2xl mx-auto">
+        VAROS applies ACMG/AMP 2015 classification guidelines autonomously — querying 5 databases
+        in parallel, evaluating all applicable criteria, and generating a clinical-quality report.
+        No manual curation required.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="#get-started" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-semibold text-lg transition">
+          Get free API key →
+        </a>
+        <a href="#demo" class="border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white px-8 py-3 rounded-xl font-semibold text-lg transition">
+          Try live demo
+        </a>
+      </div>
+      <p class="text-sm text-slate-500 mt-4">Free tier: 10 variants/month. No credit card required.</p>
+    </div>
+  </section>
+
+  <!-- Stats bar -->
+  <div class="bg-slate-900 border-y border-slate-800 py-6">
+    <div class="max-w-5xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+      <div><div class="text-3xl font-bold text-blue-400">~50%</div><div class="text-sm text-slate-400 mt-1">of hereditary variants are VUS</div></div>
+      <div><div class="text-3xl font-bold text-blue-400">5</div><div class="text-sm text-slate-400 mt-1">databases queried in parallel</div></div>
+      <div><div class="text-3xl font-bold text-blue-400">8+</div><div class="text-sm text-slate-400 mt-1">ACMG criteria evaluated</div></div>
+      <div><div class="text-3xl font-bold text-blue-400">&lt;30s</div><div class="text-sm text-slate-400 mt-1">from input to clinical report</div></div>
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <section id="how" class="py-20 px-6">
+    <div class="max-w-5xl mx-auto">
+      <h2 class="text-3xl font-bold text-center mb-12">How VAROS works</h2>
+      <div class="grid md:grid-cols-4 gap-6">
+        <div class="bg-slate-900 rounded-xl p-6 border border-slate-800 text-center">
+          <div class="text-4xl mb-3">📝</div>
+          <div class="font-semibold mb-2">1. Submit variant</div>
+          <div class="text-sm text-slate-400">HGVS notation, rsID, or gene:change format</div>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-6 border border-slate-800 text-center">
+          <div class="text-4xl mb-3">⚡</div>
+          <div class="font-semibold mb-2">2. Parallel evidence</div>
+          <div class="text-sm text-slate-400">ClinVar, gnomAD, PubMed, AlphaMissense, SpliceAI — simultaneously</div>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-6 border border-slate-800 text-center">
+          <div class="text-4xl mb-3">🔬</div>
+          <div class="font-semibold mb-2">3. ACMG evaluation</div>
+          <div class="text-sm text-slate-400">All applicable criteria with evidence citations</div>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-6 border border-slate-800 text-center">
+          <div class="text-4xl mb-3">📄</div>
+          <div class="font-semibold mb-2">4. Clinical report</div>
+          <div class="text-sm text-slate-400">PDF + JSON + AI explanation in plain language</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live demo -->
+  <section id="demo" class="py-20 px-6 bg-slate-900">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-3xl font-bold text-center mb-4">Live demo</h2>
+      <p class="text-center text-slate-400 mb-10">Try it with your own variant (API key required) or use our example</p>
+
+      <div class="bg-slate-950 rounded-2xl p-6 border border-slate-700 card-glow">
+        <div class="flex gap-3 mb-4">
+          <input
+            id="demo-variant"
+            type="text"
+            placeholder="e.g. BRCA1:c.5266dupC"
+            value="BRCA1:c.5266dupC"
+            class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+          />
+          <input
+            id="demo-key"
+            type="text"
+            placeholder="API key (vrs_...)"
+            class="w-48 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+          />
+          <button
+            onclick="runDemo()"
+            id="demo-btn"
+            class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition whitespace-nowrap"
+          >
+            Classify →
+          </button>
+        </div>
+
+        <div id="demo-result" class="hidden">
+          <div class="border-t border-slate-700 pt-4 mt-2">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="font-mono text-blue-300 text-sm" id="res-variant"></span>
+              <span id="res-badge" class="px-3 py-1 rounded-full text-xs font-bold"></span>
+              <span class="text-slate-500 text-sm">confidence: <span id="res-confidence"></span>/100</span>
+            </div>
+            <div id="res-criteria" class="space-y-1 mb-4"></div>
+            <div id="res-summary" class="text-sm text-slate-300 bg-slate-800/50 rounded-lg p-4 hidden"></div>
+          </div>
+        </div>
+
+        <div id="demo-error" class="hidden text-red-400 text-sm mt-3 p-3 bg-red-900/20 rounded-lg border border-red-800/40"></div>
+        <div id="demo-loading" class="hidden text-slate-400 text-sm mt-3 text-center py-4">
+          ⚡ Querying databases...
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="pricing" class="py-20 px-6">
+    <div class="max-w-5xl mx-auto">
+      <h2 class="text-3xl font-bold text-center mb-4">Simple pricing</h2>
+      <p class="text-center text-slate-400 mb-12">Start free. Scale as you grow.</p>
+      <div class="grid md:grid-cols-3 gap-6">
+
+        <!-- Free -->
+        <div class="bg-slate-900 rounded-2xl p-6 border border-slate-800">
+          <div class="text-lg font-bold mb-1">Research</div>
+          <div class="text-4xl font-bold mb-1">$0<span class="text-xl text-slate-400">/mo</span></div>
+          <div class="text-slate-400 text-sm mb-6">Forever free</div>
+          <ul class="space-y-2 text-sm text-slate-300 mb-8">
+            <li>✅ 10 variants / month</li>
+            <li>✅ JSON API response</li>
+            <li>✅ All ACMG criteria</li>
+            <li>✅ ClinVar + gnomAD evidence</li>
+            <li class="text-slate-500">— No PDF reports</li>
+            <li class="text-slate-500">— No monitoring alerts</li>
+          </ul>
+          <a href="#get-started" class="block w-full text-center border border-slate-600 hover:border-slate-400 text-slate-300 py-2.5 rounded-lg font-medium transition text-sm">Get started free</a>
+        </div>
+
+        <!-- Starter -->
+        <div class="bg-blue-950/60 rounded-2xl p-6 border border-blue-700/50 card-glow relative">
+          <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full">MOST POPULAR</div>
+          <div class="text-lg font-bold mb-1">Starter</div>
+          <div class="text-4xl font-bold mb-1">$49<span class="text-xl text-slate-400">/mo</span></div>
+          <div class="text-slate-400 text-sm mb-6">For genetic counselors & small labs</div>
+          <ul class="space-y-2 text-sm text-slate-300 mb-8">
+            <li>✅ 200 variants / month</li>
+            <li>✅ PDF + HTML reports</li>
+            <li>✅ AI clinical narratives</li>
+            <li>✅ Continuous monitoring</li>
+            <li>✅ Email alerts on reclassification</li>
+            <li>✅ Email support</li>
+          </ul>
+          <button onclick="checkout('starter')" class="block w-full text-center bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg font-medium transition text-sm">Start Starter plan</button>
+        </div>
+
+        <!-- Pro -->
+        <div class="bg-slate-900 rounded-2xl p-6 border border-slate-800">
+          <div class="text-lg font-bold mb-1">Pro</div>
+          <div class="text-4xl font-bold mb-1">$199<span class="text-xl text-slate-400">/mo</span></div>
+          <div class="text-slate-400 text-sm mb-6">For biotech teams & clinical labs</div>
+          <ul class="space-y-2 text-sm text-slate-300 mb-8">
+            <li>✅ 2,000 variants / month</li>
+            <li>✅ Everything in Starter</li>
+            <li>✅ Batch VCF processing</li>
+            <li>✅ Priority support (24h SLA)</li>
+            <li>✅ Custom gene panels</li>
+            <li>✅ API rate limit: 100 req/min</li>
+          </ul>
+          <button onclick="checkout('pro')" class="block w-full text-center border border-blue-600 hover:bg-blue-900/40 text-blue-400 py-2.5 rounded-lg font-medium transition text-sm">Start Pro plan</button>
+        </div>
+
+      </div>
+
+      <div class="mt-8 text-center text-slate-400 text-sm">
+        Need more? <a href="mailto:enterprise@varos.io" class="text-blue-400 hover:underline">Contact us for Enterprise pricing</a> — unlimited variants, SLA, VCEP gene-specific rules, custom branding.
+      </div>
+    </div>
+  </section>
+
+  <!-- Get started / Register -->
+  <section id="get-started" class="py-20 px-6 bg-slate-900">
+    <div class="max-w-lg mx-auto text-center">
+      <h2 class="text-3xl font-bold mb-4">Get your free API key</h2>
+      <p class="text-slate-400 mb-8">No credit card. Starts working in seconds.</p>
+
+      <div class="bg-slate-950 rounded-2xl p-6 border border-slate-700 text-left">
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm text-slate-400 mb-1">Email *</label>
+            <input id="reg-email" type="email" placeholder="you@lab.edu" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-400 mb-1">Name (optional)</label>
+            <input id="reg-name" type="text" placeholder="Dr. Jane Smith" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-400 mb-1">Organization (optional)</label>
+            <input id="reg-org" type="text" placeholder="Broad Institute" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+          </div>
+          <button onclick="register()" id="reg-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-semibold transition">
+            Create free account →
+          </button>
+        </div>
+
+        <div id="reg-success" class="hidden mt-4 p-4 bg-green-900/30 border border-green-700/50 rounded-xl">
+          <div class="text-green-400 font-semibold mb-2">✅ Account created!</div>
+          <div class="text-sm text-slate-300 mb-1">Your API key:</div>
+          <code id="reg-key" class="block bg-slate-800 px-3 py-2 rounded text-blue-300 text-sm break-all"></code>
+          <div class="text-xs text-slate-500 mt-2">Save this key — it was also sent to your email.</div>
+        </div>
+        <div id="reg-error" class="hidden mt-4 text-red-400 text-sm p-3 bg-red-900/20 rounded-lg border border-red-800/40"></div>
+      </div>
+
+      <div class="mt-8 text-sm text-slate-500">
+        <div class="mb-3 text-slate-400 font-medium">Quick start with the CLI:</div>
+        <pre class="bg-slate-900 text-left border border-slate-700 rounded-xl p-4 text-xs text-slate-300">
+pip install varos
+varos classify "BRCA1:c.5266dupC"</pre>
+        <div class="mt-3">
+          <a href="/docs" class="text-blue-400 hover:underline">API documentation →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800 py-8 px-6 text-center text-sm text-slate-500">
+    <p class="mb-2"><span class="text-blue-400 font-semibold">VAROS</span> — Variant Autonomous Reclassification & Observation System</p>
+    <p>Built for clinical genomics. ACMG/AMP 2015 guidelines. <a href="mailto:hello@varos.io" class="text-slate-400 hover:text-white">hello@varos.io</a></p>
+  </footer>
+
+  <script>
+    const API_BASE = window.location.origin;
+
+    const CLASSIFICATION_STYLES = {
+      "Pathogenic": { badge: "badge-pathogenic", label: "Pathogenic" },
+      "Likely Pathogenic": { badge: "badge-lp", label: "Likely Pathogenic" },
+      "Variant of Uncertain Significance": { badge: "badge-vus", label: "VUS" },
+      "Likely Benign": { badge: "badge-lb", label: "Likely Benign" },
+      "Benign": { badge: "badge-benign", label: "Benign" },
+    };
+
+    async function runDemo() {
+      const variant = document.getElementById("demo-variant").value.trim();
+      const key = document.getElementById("demo-key").value.trim();
+      if (!variant) return;
+      if (!key) { showDemoError("Enter your API key to try the demo. Get one free below ↓"); return; }
+
+      document.getElementById("demo-result").classList.add("hidden");
+      document.getElementById("demo-error").classList.add("hidden");
+      document.getElementById("demo-loading").classList.remove("hidden");
+      document.getElementById("demo-btn").disabled = true;
+
+      try {
+        const res = await fetch(`${API_BASE}/v1/classify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-VAROS-KEY": key },
+          body: JSON.stringify({ variant }),
+        });
+        const data = await res.json();
+        document.getElementById("demo-loading").classList.add("hidden");
+        document.getElementById("demo-btn").disabled = false;
+
+        if (!res.ok) { showDemoError(data.detail || "Classification failed"); return; }
+
+        const style = CLASSIFICATION_STYLES[data.classification] || { badge: "badge-vus", label: data.classification };
+        document.getElementById("res-variant").textContent = data.variant;
+        const badge = document.getElementById("res-badge");
+        badge.className = `px-3 py-1 rounded-full text-xs font-bold ${style.badge}`;
+        badge.textContent = style.label;
+        document.getElementById("res-confidence").textContent = data.confidence;
+
+        const criteriaEl = document.getElementById("res-criteria");
+        criteriaEl.innerHTML = "";
+        (data.criteria_triggered || []).forEach(c => {
+          const div = document.createElement("div");
+          const dirColor = c.direction === "pathogenic" ? "text-red-400" : "text-green-400";
+          div.className = "text-xs text-slate-400 flex gap-2";
+          div.innerHTML = `<span class="font-mono font-bold text-slate-300 w-8">${c.code}</span><span class="${dirColor}">${c.direction}</span><span class="flex-1">${c.evidence.substring(0, 100)}${c.evidence.length > 100 ? "…" : ""}</span>`;
+          criteriaEl.appendChild(div);
+        });
+
+        if (data.llm_summary) {
+          const sumEl = document.getElementById("res-summary");
+          sumEl.textContent = data.llm_summary;
+          sumEl.classList.remove("hidden");
+        }
+
+        document.getElementById("demo-result").classList.remove("hidden");
+      } catch (e) {
+        document.getElementById("demo-loading").classList.add("hidden");
+        document.getElementById("demo-btn").disabled = false;
+        showDemoError("Network error. Is the API running?");
+      }
+    }
+
+    function showDemoError(msg) {
+      const el = document.getElementById("demo-error");
+      el.textContent = msg;
+      el.classList.remove("hidden");
+    }
+
+    async function register() {
+      const email = document.getElementById("reg-email").value.trim();
+      const name = document.getElementById("reg-name").value.trim();
+      const org = document.getElementById("reg-org").value.trim();
+      if (!email) { document.getElementById("reg-error").textContent = "Email is required"; document.getElementById("reg-error").classList.remove("hidden"); return; }
+
+      document.getElementById("reg-btn").disabled = true;
+      document.getElementById("reg-btn").textContent = "Creating account...";
+      document.getElementById("reg-error").classList.add("hidden");
+
+      try {
+        const res = await fetch(`${API_BASE}/v1/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, name, organization: org }),
+        });
+        const data = await res.json();
+        document.getElementById("reg-btn").disabled = false;
+        document.getElementById("reg-btn").textContent = "Create free account →";
+
+        if (!res.ok) {
+          document.getElementById("reg-error").textContent = data.detail || "Registration failed";
+          document.getElementById("reg-error").classList.remove("hidden");
+          return;
+        }
+        document.getElementById("reg-key").textContent = data.api_key;
+        document.getElementById("reg-success").classList.remove("hidden");
+        // Pre-fill demo key
+        document.getElementById("demo-key").value = data.api_key;
+      } catch (e) {
+        document.getElementById("reg-btn").disabled = false;
+        document.getElementById("reg-btn").textContent = "Create free account →";
+        document.getElementById("reg-error").textContent = "Network error";
+        document.getElementById("reg-error").classList.remove("hidden");
+      }
+    }
+
+    async function checkout(tier) {
+      const key = document.getElementById("demo-key").value.trim();
+      if (!key) { alert("Enter your API key in the demo section first, or register below."); return; }
+      try {
+        const res = await fetch(`${API_BASE}/v1/billing/checkout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-VAROS-KEY": key },
+          body: JSON.stringify({ tier, success_url: window.location.origin + "/success", cancel_url: window.location.href }),
+        });
+        const data = await res.json();
+        if (res.ok && data.checkout_url) {
+          window.location.href = data.checkout_url;
+        } else {
+          alert(data.detail || "Checkout failed");
+        }
+      } catch (e) {
+        alert("Billing not configured. Contact hello@varos.io to upgrade.");
+      }
+    }
+  </script>
+</body>
+</html>
