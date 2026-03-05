@@ -108,6 +108,8 @@ class User(Base):
     api_key = relationship("ApiKey", back_populates="user", uselist=False, cascade="all, delete-orphan")
     usage_records = relationship("UsageRecord", back_populates="user", cascade="all, delete-orphan")
     memberships = relationship("Membership", back_populates="user")
+    watches = relationship("ReclassificationWatch", back_populates="user", cascade="all, delete-orphan")
+    batch_jobs = relationship("BatchJob", back_populates="user", cascade="all, delete-orphan")
 
     @property
     def credits_limit(self) -> int:
@@ -154,3 +156,55 @@ class UsageRecord(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="usage_records")
+
+
+class ReclassificationWatch(Base):
+    """A user's subscription to reclassification alerts for a specific variant."""
+    __tablename__ = "reclassification_watches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # HGVS genomic notation, e.g. "NM_007294.4:c.5266dupC"
+    variant_hgvs = Column(String, nullable=False, index=True)
+    gene = Column(String, nullable=True)
+    # Classification at time of subscription
+    original_classification = Column(String, nullable=True)
+    # Latest known ClinVar classification (updated by weekly sync job)
+    current_classification = Column(String, nullable=True)
+    # ClinVar variation ID for efficient lookup
+    clinvar_variation_id = Column(String, nullable=True, index=True)
+    # Webhook URL to POST to on reclassification (optional)
+    webhook_url = Column(String, nullable=True)
+    last_checked_at = Column(DateTime, nullable=True)
+    alerted_at = Column(DateTime, nullable=True)  # last time an alert was sent
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", back_populates="watches")
+
+
+class BatchJob(Base):
+    """Async batch VCF classification job."""
+    __tablename__ = "batch_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(String, unique=True, index=True, nullable=False)  # UUID4
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(String, default="queued")  # queued | processing | complete | failed
+    # Input stats
+    vcf_filename = Column(String, nullable=True)
+    total_variants = Column(Integer, default=0)
+    filtered_variants = Column(Integer, default=0)  # after pre-filter
+    processed_variants = Column(Integer, default=0)
+    failed_variants = Column(Integer, default=0)
+    # Classification mode
+    mode = Column(String, default="germline")  # germline | somatic
+    # Results as JSON blob (for small jobs); large jobs use file storage
+    results_json = Column(Text, nullable=True)
+    error_message = Column(String, nullable=True)
+    webhook_url = Column(String, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", back_populates="batch_jobs")
