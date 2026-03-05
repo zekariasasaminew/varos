@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 import io
 
@@ -125,3 +127,50 @@ async def classify_report(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Report generation failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Somatic classification endpoint (AMP/ASCO/CAP 2017)
+# ---------------------------------------------------------------------------
+
+class SomaticClassifyRequest(ClassifyRequest):
+    """Extends base request with somatic-specific parameters."""
+    tumor_type: str = "solid_tumor"
+    gene: Optional[str] = None
+
+
+@router.post(
+    "/classify/somatic",
+    summary="Classify a somatic variant (AMP/ASCO/CAP 2017)",
+    tags=["classification"],
+)
+async def classify_somatic_variant(
+    body: SomaticClassifyRequest,
+    user: User = Depends(require_quota),
+    db: Session = Depends(get_db),
+):
+    """
+    Classify a somatic variant using AMP/ASCO/CAP 2017 guidelines.
+
+    Returns Tier I–IV classification with oncogenicity, therapy evidence
+    from OncoKB and CIViC, and clinical trial matches.
+
+    - **Tier I**: Strong clinical significance (FDA-approved therapies)
+    - **Tier II**: Potential clinical significance (off-label / investigational)
+    - **Tier III**: Variant of unknown clinical significance
+    - **Tier IV**: Benign somatic polymorphism
+
+    Requires `Oncology Pro` plan or higher.
+    """
+    try:
+        from varos.classifiers.somatic import classify_somatic
+        result = await classify_somatic(
+            variant_hgvs=body.variant,
+            gene=body.gene or "",
+            tumor_type=body.tumor_type,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Somatic classification failed: {exc}")
+
+    record_usage(db, user, body.variant, f"somatic:{result.tier}", result.confidence)
+    return result.__dict__
