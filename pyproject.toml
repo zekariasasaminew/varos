@@ -1,0 +1,96 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "varos"
+version = "0.1.0"
+description = "Variant Autonomous Reclassification and Observation System — AI-powered ACMG variant classification"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12"
+authors = [{ name = "VAROS Team" }]
+keywords = ["bioinformatics", "genomics", "variant-classification", "ACMG", "clinical-genetics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+dependencies = [
+    # CLI
+    "typer>=0.12.0",
+    "rich>=13.7.0",
+    # Agent framework
+    "langgraph>=0.2.0",
+    "langchain-anthropic>=0.2.0",
+    "langchain-core>=0.3.0",
+    # Data / validation
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    # HTTP
+    "httpx>=0.27.0",
+    "aiohttp>=3.9.0",
+    # Bioinformatics
+    "biopython>=1.83",
+    # PDF / reports
+    "weasyprint>=62.0",
+    "jinja2>=3.1.0",
+    # Database
+    "sqlalchemy>=2.0.0",
+    "aiosqlite>=0.20.0",
+    # Scheduling (daemon)
+    "apscheduler>=3.10.0",
+    # API
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+    "python-multipart>=0.0.9",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "email-validator>=2.1.0",
+    # Email
+    "sendgrid>=6.11.0",
+    # Billing
+    "stripe>=9.0.0",
+    # Utils
+    "python-dotenv>=1.0.0",
+    "tenacity>=8.2.0",
+    "structlog>=24.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-httpx>=0.30.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+    "black>=24.0.0",
+    "pre-commit>=3.7.0",
+    "ipython>=8.0.0",
+]
+
+[project.scripts]
+varos = "varos.cli.main:app"
+
+[project.urls]
+Homepage = "https://varos.io"
+Repository = "https://github.com/varos-ai/varos"
+Documentation = "https://docs.varos.io"
+"Bug Tracker" = "https://github.com/varos-ai/varos/issues"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
