@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,12 +15,48 @@ from fastapi.responses import FileResponse, JSONResponse
 from varos import __version__
 from varos.config import settings
 
+logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> None:
+    logging.basicConfig(
+        level=getattr(logging, settings.varos_log_level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S",
+    )
+
+
+def _warn_startup() -> None:
+    """Log warnings about missing/insecure config at startup."""
+    if settings.is_production:
+        if settings.secret_key == "change-me-in-production":
+            logger.warning(
+                "SECRET_KEY is set to the default value — set a strong random value via env var!"
+            )
+        if not settings.has_llm:
+            logger.warning(
+                "No LLM API key set (ANTHROPIC_API_KEY / OPENAI_API_KEY) — "
+                "AI reasoning and summaries will be unavailable."
+            )
+        if not settings.stripe_secret_key:
+            logger.warning(
+                "STRIPE_SECRET_KEY not set — billing endpoints will be non-functional."
+            )
+        if settings.allowed_origins == ["*"]:
+            logger.warning(
+                "CORS_ORIGINS is '*' in production — set to your frontend domain for security."
+            )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize DB on startup."""
+    _configure_logging()
+    _warn_startup()
+    logger.info("VAROS %s starting (env=%s)", __version__, settings.varos_env)
     from varos.api.database import init_db
     init_db()
+    logger.info("Database ready.")
     yield
 
 
@@ -100,10 +137,10 @@ app = FastAPI(
     },
 )
 
-# CORS — allow all for MVP (restrict to specific domains in production)
+# CORS — configure via CORS_ORIGINS env var (default: * for MVP, restrict in production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -155,7 +192,9 @@ async def health():
     return {
         "status": "ok",
         "version": __version__,
+        "env": settings.varos_env,
         "llm_available": settings.has_llm,
+        "billing_available": bool(settings.stripe_secret_key),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
