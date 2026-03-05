@@ -5,7 +5,7 @@
 Classify genetic variants using ACMG/AMP 2015 guidelines and AMP/ASCO/CAP 2017 (somatic) + AI-powered evidence synthesis.  
 Built for clinical genomics labs, pharma drug discovery teams, and bioinformatics startups.
 
-[![Tests](https://img.shields.io/badge/tests-75%20passing-brightgreen)](#development)
+[![Tests](https://img.shields.io/badge/tests-103%20passing-brightgreen)](#development)
 [![API](https://img.shields.io/badge/API-FastAPI-009688)](#rest-api)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -44,6 +44,9 @@ VAROS automatically classifies genetic variants by aggregating evidence from a d
 - **ClinVar XML/CSV export** — One-click ClinVar Submission API v2 XML or bulk upload CSV (saves 30–60 min/variant)
 - **PDF/HTML reports** — Clinical-grade variant interpretation reports
 - **Organization management** — Multi-seat orgs with OWNER/ANALYST/VIEWER roles
+- **VAROS Network** — Opt-in federated variant intelligence: contribute de-identified classifications, query cross-org consensus
+- **Approval workflow** — DRAFT → PENDING_REVIEW → APPROVED/REJECTED state machine with four-eyes review
+- **Audit logs** — Immutable append-only event log with CSV export for compliance reporting
 
 ### API & Integrations
 - **REST API** — Authenticated JSON API, Swagger UI at `/docs`
@@ -116,6 +119,17 @@ varos serve --port 8000 --reload
 | `GET`  | `/v1/me` | Account info + tier |
 | `GET`  | `/v1/usage` | Monthly usage & quota |
 | `POST` | `/v1/billing/checkout` | Stripe checkout session |
+| `GET`  | `/v1/network/consensus/{hash}` | Federated cross-org consensus for a variant |
+| `POST` | `/v1/network/share` | Contribute a de-identified classification to the network |
+| `POST` | `/v1/network/hash` | Compute SHA-256 privacy hash for an HGVS notation |
+| `GET`  | `/v1/network/stats` | Global network statistics |
+| `GET`  | `/v1/network/my-shares` | List your org's network contributions |
+| `GET`  | `/v1/approvals` | List classification approvals (filter by state) |
+| `POST` | `/v1/approvals/{id}/submit` | Submit classification for curator review |
+| `POST` | `/v1/approvals/{id}/approve` | Approve classification (four-eyes enforced) |
+| `POST` | `/v1/approvals/{id}/reject` | Reject with comment (required) |
+| `GET`  | `/v1/audit-logs` | List immutable audit log entries |
+| `GET`  | `/v1/audit-logs/export` | Export audit trail as CSV |
 | `GET`  | `/health` | Health check |
 
 ### Authentication
@@ -199,6 +213,92 @@ Classification report includes: _"Classified using BRCA1/2 VCEP v1.1.0 (ClinGen,
 
 ---
 
+## VAROS Network — Federated Variant Intelligence
+
+The VAROS Network is the **competitive moat**: each organization that contributes de-identified classifications makes VAROS more valuable for everyone else.
+
+### How it works
+
+1. **Contribute** — After classifying a variant, opt in to share it to the network.  
+   Your variant is stored as a SHA-256 hash — raw HGVS notation is never exposed across organizations.
+
+2. **Query consensus** — Ask "what do other labs say about this variant?"  
+   Returns the majority classification, contributor count, and agreement level.
+
+3. **Network bonus** — Organizations that share data receive a 20% monthly quota discount.
+
+### Agreement levels
+
+| Level | Meaning |
+|-------|---------|
+| `strong` | ≥90% of contributing orgs agree |
+| `moderate` | 75–89% agree |
+| `weak` | <75% agree (genuine scientific uncertainty) |
+| `single` | Only one organization has seen this variant |
+
+### Example
+
+```bash
+# Contribute a classification to the network
+curl -X POST https://api.varos.io/v1/network/share \
+  -H "X-VAROS-KEY: vrs_..." \
+  -d '{
+    "variant_hgvs": "NM_007294.4:c.5266dupC",
+    "gene": "BRCA1",
+    "classification": "Pathogenic",
+    "criteria_codes": ["PVS1", "PS2"],
+    "confidence": 95,
+    "genome_build": "GRCh38"
+  }'
+
+# Query cross-org consensus
+curl "https://api.varos.io/v1/network/consensus/c9b4d649..." \
+  -H "X-VAROS-KEY: vrs_..."
+# → {"total_orgs": 7, "consensus": "Pathogenic", "agreement": "strong", "agreement_pct": 0.86}
+```
+
+---
+
+## Compliance & Audit
+
+### Audit Logs
+
+VAROS maintains an **immutable append-only audit trail** for every significant action:
+
+- `variant.classified` — every classification event
+- `batch.job_submitted` — batch VCF uploads
+- `classification.approved` / `classification.rejected` — approval workflow events
+- `api_key.created` — key provisioning
+- `network.share_contributed` — network contributions
+
+```bash
+# List recent events
+curl "https://api.varos.io/v1/audit-logs?action=variant.classified&limit=50" \
+  -H "X-VAROS-KEY: vrs_..."
+
+# Export full audit trail as CSV
+curl "https://api.varos.io/v1/audit-logs/export" \
+  -H "X-VAROS-KEY: vrs_..." > audit_trail.csv
+```
+
+### Approval Workflow
+
+Built-in **four-eyes review** state machine for labs that require dual authorization before finalizing a classification:
+
+```
+DRAFT → PENDING_REVIEW → APPROVED
+                       → REJECTED → PENDING_REVIEW (re-submit after rework)
+```
+
+Rules enforced:
+- The **approver cannot be the same person as the submitter** (four-eyes principle)
+- **Rejection requires a comment** documenting the reason
+- All state transitions are written to the immutable audit log
+
+This powers the CLIA-module premium add-on for labs requiring workflow compliance.
+
+---
+
 ## Pricing
 
 | Tier | Price | Variants/month | Key Features |
@@ -266,7 +366,7 @@ Set Stripe webhook endpoint: `https://your-app.fly.dev/v1/billing/webhook`
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -v         # 75 tests passing
+pytest tests/ -v         # 103 tests passing
 varos serve --reload     # Hot-reload dev server
 ```
 
@@ -279,7 +379,8 @@ varos/
 │   └── evidence_summarizer.py   # LLM ACMG evidence extraction from PubMed
 ├── api/
 │   ├── app.py                   # FastAPI app + router registration
-│   ├── models.py                # SQLAlchemy ORM (User, Org, Watch, BatchJob)
+│   ├── audit.py                 # Append-only audit log helper
+│   ├── models.py                # SQLAlchemy ORM (User, Org, Watch, BatchJob, NetworkShare, AuditLog, ClassificationApproval)
 │   ├── routes/
 │   │   ├── classify.py          # POST /v1/classify + /somatic
 │   │   ├── batch.py             # VCF batch processing
