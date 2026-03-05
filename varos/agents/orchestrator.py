@@ -2,7 +2,8 @@
 
 Pipeline:
   normalize_variant
-      └── asyncio.gather(gnomAD, ClinVar, PubMed, AlphaMissense+SpliceAI)
+      └── enrich_genomic_coords (Ensembl REST, async)
+      └── asyncio.gather(gnomAD, ClinVar, PubMed, SpliceAI, CADD, REVEL)
               └── acmg_classify → llm_reason → ClassificationResult
 """
 
@@ -10,7 +11,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import re
 from typing import Any
+
+import httpx
 
 from varos.config import settings
 from varos.connectors import gnomad, clinvar, pubmed, alphamissense, spliceai
@@ -28,9 +33,14 @@ from varos.models import (
     VariantInput,
 )
 
+logger = logging.getLogger("varos.orchestrator")
+
+_ENSEMBL_REST = "https://rest.ensembl.org"
+_ENSEMBL_REST_GRCH37 = "https://grch37.rest.ensembl.org"
+
 
 # ---------------------------------------------------------------------------
-# Variant normalization (heuristic; Phase 3: Mutalyzer API)
+# Variant normalization (heuristic HGVS parser)
 # ---------------------------------------------------------------------------
 
 def _normalize_variant(vi: VariantInput) -> NormalizedVariant:
@@ -38,32 +48,57 @@ def _normalize_variant(vi: VariantInput) -> NormalizedVariant:
     gene = ""
     transcript = ""
     variant_type = None
+    chrom = None
+    pos = None
+    ref = None
+    alt = None
 
     if ":" in hgvs:
         parts = hgvs.split(":", 1)
-        gene_or_tx = parts[0]
-        cdna = parts[1] if len(parts) > 1 else ""
+        gene_or_tx = parts[0].strip()
+        notation = parts[1].strip() if len(parts) > 1 else ""
         gene = gene_or_tx.split(".")[0] if gene_or_tx.startswith("NM_") else gene_or_tx
         transcript = gene_or_tx if gene_or_tx.startswith("NM_") else ""
 
-        cdna_lower = cdna.lower()
-        if "dup" in cdna_lower:
-            variant_type = "frameshift"
-        elif "del" in cdna_lower and "ins" not in cdna_lower:
-            variant_type = "deletion"
-        elif "ins" in cdna_lower and "del" not in cdna_lower:
-            variant_type = "insertion"
-        elif any(x in cdna_lower for x in ["+1", "+2", "-1", "-2", "splice"]):
-            variant_type = "splice_donor"
-        elif ">" in cdna:
-            variant_type = "substitution"
-        elif cdna.startswith("c."):
-            variant_type = "coding"
+        # Parse genomic HGVS: chr17:g.41276045C>A  or  17:g.41276045C>A
+        if notation.startswith("g."):
+            chrom = gene_or_tx.replace("chr", "").replace("Chr", "")
+            # g.12345A>T  or  g.12345_12347del
+            m = re.match(r"g\.(\d+)([A-Z]+)>([A-Z]+)", notation)
+            if m:
+                pos = int(m.group(1))
+                ref = m.group(2)
+                alt = m.group(3)
+        else:
+            notation_lower = notation.lower()
+            if "dup" in notation_lower:
+                variant_type = "frameshift"
+            elif "del" in notation_lower and "ins" not in notation_lower:
+                variant_type = "deletion"
+            elif "ins" in notation_lower and "del" not in notation_lower:
+                variant_type = "insertion"
+            elif any(x in notation_lower for x in ["+1", "+2", "-1", "-2", "splice"]):
+                variant_type = "splice_donor"
+            elif ">" in notation:
+                variant_type = "substitution"
+                # Try to extract ref/alt from simple SNV: c.1234A>T
+                m = re.search(r">([A-Z])$", notation)
+                if m:
+                    alt = m.group(1)
+                m2 = re.search(r"([A-Z])>", notation)
+                if m2:
+                    ref = m2.group(1)
+            elif notation.startswith("c."):
+                variant_type = "coding"
     elif "p." in hgvs:
         variant_type = (
             "frameshift" if any(x in hgvs for x in ["*", "Ter", "fs", "X"])
             else "missense"
         )
+
+    if ref and alt and ref == alt:
+        ref = None
+        alt = None
 
     return NormalizedVariant(
         hgvs_cdna=hgvs,
@@ -71,7 +106,57 @@ def _normalize_variant(vi: VariantInput) -> NormalizedVariant:
         transcript=transcript,
         genome_build=vi.genome_build,
         variant_type=variant_type,
+        chrom=chrom,
+        pos=pos,
+        ref=ref,
+        alt=alt,
     )
+
+
+async def _enrich_genomic_coords(norm: NormalizedVariant) -> NormalizedVariant:
+    """
+    If chrom/pos are missing and we have a transcript HGVS, call Ensembl REST
+    VEP endpoint to get GRCh38 genomic coordinates.
+
+    This enables gnomAD and SpliceAI lookups for transcript-based input like
+    NM_007294.4:c.5266dupC.
+
+    Non-blocking: on any error, returns norm unchanged.
+    """
+    if norm.chrom and norm.pos:
+        return norm  # already have coords
+
+    hgvs = norm.hgvs_cdna
+    if not hgvs:
+        return norm
+
+    base = _ENSEMBL_REST if norm.genome_build == "GRCh38" else _ENSEMBL_REST_GRCH37
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{base}/vep/human/hgvs/{httpx.URL(hgvs)}",
+                headers={"Content-Type": "application/json"},
+                params={"content-type": "application/json"},
+            )
+            if resp.status_code != 200:
+                return norm
+            data = resp.json()
+            if not data or not isinstance(data, list):
+                return norm
+            hit = data[0]
+            seq_region = hit.get("seq_region_name", "")
+            start = hit.get("start")
+            allele_string = hit.get("allele_string", "")  # e.g. "C/T" or "-/C"
+            if seq_region and start:
+                norm.chrom = seq_region
+                norm.pos = int(start)
+                if "/" in allele_string:
+                    parts = allele_string.split("/", 1)
+                    norm.ref = parts[0] if parts[0] != "-" else ""
+                    norm.alt = parts[1] if parts[1] != "-" else ""
+    except Exception as exc:
+        logger.debug("Ensembl VEP coord lookup failed for %s: %s", hgvs, exc)
+    return norm
 
 
 # ---------------------------------------------------------------------------
@@ -192,8 +277,9 @@ Respond ONLY with JSON: {{"clinical_note": "...", "evidence_summary": "...", "pa
 
 async def run_classification(variant_input: VariantInput) -> ClassificationResult:
     """Classify a variant end-to-end using parallel evidence gathering."""
-    # Step 1: normalize
+    # Step 1: normalize + enrich with genomic coordinates (enables gnomAD/SpliceAI)
     norm = _normalize_variant(variant_input)
+    norm = await _enrich_genomic_coords(norm)
     warnings: list[str] = []
 
     # Step 2: parallel evidence gathering

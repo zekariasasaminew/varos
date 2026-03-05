@@ -21,7 +21,7 @@ import httpx
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 
 ALPHAMISSENSE_URL = "https://storage.googleapis.com/dm_alphamissense/AlphaMissense_hg38.tsv.gz"
-DEFAULT_CACHE_DIR = Path.home() / ".varos" / "data"
+DEFAULT_CACHE_DIR = Path(os.environ.get("VAROS_DATA_DIR", str(Path.home() / ".varos" / "data")))
 DB_PATH = DEFAULT_CACHE_DIR / "alphamissense.db"
 
 # Classification thresholds from DeepMind paper
@@ -59,9 +59,12 @@ def is_indexed() -> bool:
     """Check if AlphaMissense data has been downloaded and indexed."""
     if not DB_PATH.exists():
         return False
-    with _get_connection() as conn:
-        count = conn.execute("SELECT COUNT(*) FROM alphamissense LIMIT 1").fetchone()
-        return count is not None and count[0] > 0
+    try:
+        with _get_connection() as conn:
+            count = conn.execute("SELECT COUNT(*) FROM alphamissense LIMIT 1").fetchone()
+            return count is not None and count[0] > 0
+    except Exception:
+        return False
 
 
 def download_and_index(cache_dir: Path | None = None) -> None:
