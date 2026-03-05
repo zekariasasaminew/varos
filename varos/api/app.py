@@ -113,10 +113,12 @@ app.add_middleware(
 from varos.api.routes.classify import router as classify_router
 from varos.api.routes.users import router as users_router
 from varos.api.routes.billing import router as billing_router
+from varos.api.routes.orgs import router as orgs_router
 
 app.include_router(classify_router)
 app.include_router(users_router)
 app.include_router(billing_router)
+app.include_router(orgs_router)
 
 # Serve landing page static files
 _static_dir = Path(__file__).parent.parent / "static"
