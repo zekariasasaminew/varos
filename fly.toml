@@ -1,0 +1,36 @@
+# fly.toml — Deploy VAROS to Fly.io with: fly deploy
+# First time: fly launch --no-deploy (to set secrets), then fly deploy
+
+app = "varos-api"
+primary_region = "iad"  # US East; change to "lhr" for EU
+
+[build]
+  dockerfile = "docker/Dockerfile"
+  build_args = {}
+
+[env]
+  VAROS_ENV = "production"
+  PORT = "8000"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 200
+    soft_limit = 100
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[mounts]
+  source = "varos_data"
+  destination = "/data"
+
+# Set secrets with: fly secrets set ANTHROPIC_API_KEY=... STRIPE_SECRET_KEY=... etc.
