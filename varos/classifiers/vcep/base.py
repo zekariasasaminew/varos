@@ -3,33 +3,40 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import ClassVar, Dict, List, Optional
 
 
-@dataclass
 class CriteriaOverride:
     """A modification to a standard ACMG criterion for a specific gene/context."""
-    criterion: str           # e.g. "PM2", "PP3"
-    enabled: bool = True     # False = criterion is disabled for this gene
-    strength: Optional[str] = None  # Override default strength: "supporting" | "moderate" | "strong" | "very_strong"
-    threshold: Optional[float] = None  # Override numeric threshold (e.g. gnomAD AF cutoff)
-    notes: str = ""
+
+    def __init__(
+        self,
+        criterion: str,
+        enabled: bool = True,
+        strength: Optional[str] = None,
+        threshold: Optional[float] = None,
+        notes: str = "",
+    ):
+        self.criterion = criterion
+        self.enabled = enabled
+        self.strength = strength  # "supporting" | "moderate" | "strong" | "very_strong"
+        self.threshold = threshold
+        self.notes = notes
 
 
-@dataclass
 class VCEPRuleset(ABC):
     """
     Abstract base for a ClinGen VCEP gene-specific ruleset.
 
-    Subclasses implement ``applies_to`` and ``overrides`` to replace
-    or disable ACMG criteria for specific genes.
+    Subclasses define ``name``, ``version``, ``genes``, ``specification_url``
+    as class variables, then implement ``overrides()`` to replace or disable
+    ACMG criteria for specific genes.
     """
 
-    name: str                 # Human-readable VCEP name, e.g. "BRCA1/2 VCEP"
-    version: str              # Published specification version, e.g. "v1.1.0"
-    genes: List[str]          # HGNC symbols this ruleset applies to, e.g. ["BRCA1", "BRCA2"]
-    specification_url: str    # ClinGen SVI specification URL
+    name: ClassVar[str]
+    version: ClassVar[str]
+    genes: ClassVar[List[str]]
+    specification_url: ClassVar[str]
 
     @abstractmethod
     def overrides(self) -> Dict[str, CriteriaOverride]:
@@ -52,16 +59,18 @@ class VCEPRuleset(ABC):
 # Registry — auto-populated when VCEP modules are imported
 # ---------------------------------------------------------------------------
 
-_REGISTRY: Dict[str, VCEPRuleset] = {}
+_REGISTRY: Dict[str, "VCEPRuleset"] = {}
 
 
-def register(ruleset: VCEPRuleset) -> VCEPRuleset:
-    """Register a VCEP ruleset instance; called at module import time."""
-    for gene in ruleset.genes:
-        _REGISTRY[gene.upper()] = ruleset
-    return ruleset
+def register(cls):
+    """Class decorator — instantiates and registers a VCEPRuleset subclass."""
+    instance = cls()
+    for gene in cls.genes:
+        _REGISTRY[gene.upper()] = instance
+    return cls
 
 
 def get_ruleset(gene: str) -> Optional[VCEPRuleset]:
     """Return the active VCEP ruleset for *gene*, or None for generic ACMG."""
     return _REGISTRY.get(gene.upper())
+
