@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for users, API keys, usage tracking, and organizations."""
+"""SQLAlchemy ORM models for users, API keys, usage tracking, organizations, and audit logs."""
 
 from __future__ import annotations
 
@@ -252,3 +252,91 @@ class NetworkShare(Base):
 
     org = relationship("Organization", backref="network_shares")
     user = relationship("User", backref="network_shares")
+
+
+class AuditLog(Base):
+    """
+    Immutable audit log for classification and admin actions.
+
+    Required for HIPAA-module compliance add-on (Phase 3C).
+    Available now but exposed as a premium feature only.
+
+    Actions logged:
+    - variant.classified        — variant classification completed
+    - variant.report_downloaded — PDF or HTML report downloaded
+    - classification.approved   — curator signed off
+    - classification.rejected   — curator sent back for review
+    - api_key.created           — new API key issued
+    - api_key.revoked           — API key revoked
+    - user.login                — successful API key authentication
+    - org.member_invited        — new member invited
+    - org.member_accepted       — invite accepted
+    - network.share_contributed — variant shared to network
+    - batch.job_submitted       — VCF batch job submitted
+    - batch.job_completed       — VCF batch job finished
+    """
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # Who did it
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    # What happened
+    action = Column(String, nullable=False, index=True)
+    # Resource type (variant, user, org, api_key, batch_job)
+    resource_type = Column(String, nullable=True)
+    # Resource identifier (HGVS, user email, job_id, etc.)
+    resource_id = Column(String, nullable=True)
+    # JSON blob with event-specific context (never PII)
+    details_json = Column(Text, nullable=True)
+    # Request metadata
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    # Timestamps are immutable — never updated
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", backref="audit_logs")
+
+
+class ClassificationApproval(Base):
+    """
+    Classification approval workflow (CLIA-module feature).
+
+    Supports the DRAFT → PENDING_REVIEW → APPROVED / REJECTED state machine
+    for labs that need curator sign-off before reporting variants.
+
+    This is a Phase 3C compliance add-on ($500/month as CLIA module).
+    The model is available now so data can accumulate before billing is enabled.
+
+    States:
+    - draft          — auto-created on classification, not yet reviewed
+    - pending_review — submitted for curator review
+    - approved       — curator signed off, can be released to clinical report
+    - rejected       — curator rejected, returned for re-analysis
+    - superseded     — replaced by a newer classification
+    """
+    __tablename__ = "classification_approvals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usage_record_id = Column(Integer, ForeignKey("usage_records.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    # State machine
+    state = Column(String, default="draft", index=True)
+    # Who submitted for review (usually the analyst)
+    submitted_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    submitted_at = Column(DateTime, nullable=True)
+    # Who reviewed (the curator/approver)
+    reviewed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    # Curator comments
+    review_comment = Column(Text, nullable=True)
+    # Internal reference number (e.g., "LAB-2024-0042")
+    internal_ref = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", foreign_keys=[user_id], backref="approvals")
+    submitter = relationship("User", foreign_keys=[submitted_by_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by_id])
