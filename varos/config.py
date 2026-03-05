@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     varos_env: str = Field(default="development", alias="VAROS_ENV")
     varos_log_level: str = Field(default="INFO", alias="VAROS_LOG_LEVEL")
 
+    # CORS — comma-separated list of allowed origins, or "*" for all
+    # Example: "https://app.varos.io,https://varos.io"
+    cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
+
     # API
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
@@ -59,6 +63,13 @@ class Settings(BaseSettings):
     @property
     def has_llm(self) -> bool:
         return bool(self.anthropic_api_key or self.openai_api_key)
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        """Parse CORS_ORIGINS into a list."""
+        if self.cors_origins.strip() == "*":
+            return ["*"]
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
 
 @lru_cache
