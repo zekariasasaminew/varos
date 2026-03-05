@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # OMIM
     omim_api_key: str = Field(default="", alias="OMIM_API_KEY")
 
+    # OncoKB (free research token — register at oncokb.org)
+    onckb_api_token: str = Field(default="", alias="ONCKB_API_TOKEN")
+
     # Database
     database_url: str = Field(
         default="sqlite+aiosqlite:///./varos.db", alias="DATABASE_URL"
