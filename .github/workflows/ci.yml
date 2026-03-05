@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches-ignore:
+      - main      # main is tested via deploy.yml (deploy includes test)
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+        env:
+          # Minimal env — no real API keys needed for unit/integration tests
+          ANTHROPIC_API_KEY: ""
+          NCBI_EMAIL: "ci@varos.io"
+          SECRET_KEY: "ci-test-secret-key-32-chars-long!"
+          DATABASE_URL: "sqlite:///./test.db"
