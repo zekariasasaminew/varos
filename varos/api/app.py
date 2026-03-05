@@ -118,6 +118,7 @@ from varos.api.routes.watch import router as watch_router
 from varos.api.routes.batch import router as batch_router
 from varos.api.routes.clinvar_export import router as clinvar_export_router
 from varos.api.routes.trials import router as trials_router
+from varos.api.routes.network import router as network_router
 
 app.include_router(classify_router)
 app.include_router(users_router)
@@ -127,6 +128,7 @@ app.include_router(watch_router)
 app.include_router(batch_router)
 app.include_router(clinvar_export_router)
 app.include_router(trials_router)
+app.include_router(network_router)
 
 # Serve landing page static files
 _static_dir = Path(__file__).parent.parent / "static"
