@@ -208,3 +208,47 @@ class BatchJob(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="batch_jobs")
+
+
+class NetworkShare(Base):
+    """
+    VAROS Network — opt-in de-identified variant sharing.
+
+    Labs that opt in to network sharing contribute anonymized classifications.
+    In exchange they get:
+    - GET /v1/network/consensus/{hash} — see how other labs classified the same variant
+    - 20% quota discount (in billing layer)
+    - Priority queue for batch jobs
+
+    Privacy: only variant_hash (SHA-256 of canonical HGVS) is stored,
+    never the raw HGVS. Org name is never exposed; only org_id is used
+    for deduplication (so each org's classification counts once).
+    """
+    __tablename__ = "network_shares"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # SHA-256 of canonical HGVS (e.g. sha256("NM_007294.4:c.5266dupC"))
+    variant_hash = Column(String, nullable=False, index=True)
+    # Raw HGVS kept for internal use only (never returned in consensus API)
+    variant_hgvs = Column(String, nullable=False)
+    gene = Column(String, nullable=True, index=True)
+    # Normalized VAROS classification (Pathogenic, Likely Pathogenic, etc.)
+    classification = Column(String, nullable=False)
+    # ACMG criteria triggered (comma-separated codes, e.g. "PVS1,PM2,PP3")
+    criteria_codes = Column(String, nullable=True)
+    # Classification confidence (0–100)
+    confidence = Column(Integer, default=0)
+    # Org that contributed (for deduplication, never exposed in API)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    # User that contributed (if not org member)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Genome build: GRCh37 or GRCh38
+    genome_build = Column(String, default="GRCh38")
+    # True = user opted in to sharing this specific variant
+    is_shared = Column(Boolean, default=True)
+    shared_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # ClinVar variation ID if known (helps network correlation)
+    clinvar_variation_id = Column(String, nullable=True)
+
+    org = relationship("Organization", backref="network_shares")
+    user = relationship("User", backref="network_shares")
