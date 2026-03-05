@@ -67,12 +67,56 @@ Data is persisted in the `varos_data` Docker volume.
 
 ## Option 3: Fly.io (Production — Recommended)
 
-### Prerequisites (Windows)
+> **No CLI required!** Use the web-based setup below to deploy entirely through
+> browser + GitHub UI. The CLI approach is also documented for power users.
+
+### 🌐 Web-based setup (no CLI needed — 5 steps)
+
+**Step 1 — Create Fly.io account + app**
+1. Go to [fly.io/app/sign-up](https://fly.io/app/sign-up) and sign up
+2. Click **"Create App"** → name it **`varos-api`** → region **`iad` (US East)**
+3. Under the app → **Volumes** → Create volume: name `varos_data`, size 3 GB, region `iad`
+4. Under the app → **Secrets** → add these:
+   | Key | Value |
+   |-----|-------|
+   | `ANTHROPIC_API_KEY` | `sk-ant-...` |
+   | `NCBI_EMAIL` | `you@lab.edu` |
+   | `SECRET_KEY` | any 32+ char random string |
+   | (Optional) `STRIPE_SECRET_KEY` | `sk_live_...` |
+   | (Optional) `SENDGRID_API_KEY` | `SG....` |
+
+**Step 2 — Get a deploy token**
+1. Go to fly.io → **Account Settings** → **Access Tokens**
+2. Click **"Create Token"** → name it `varos-github-deploy` → **Create**
+3. Copy the token (starts with `FlyV1 ...`)
+
+**Step 3 — Add token to GitHub**
+1. Go to [github.com/zekariasasaminew/varos/settings/secrets/actions](https://github.com/zekariasasaminew/varos/settings/secrets/actions)
+2. Click **"New repository secret"**
+3. Name: `FLY_API_TOKEN`, Value: paste the token
+
+**Step 4 — Trigger deployment**
+Go to [github.com/zekariasasaminew/varos/actions](https://github.com/zekariasasaminew/varos/actions) →
+**"Deploy to Fly.io"** → **"Run workflow"** → **"Run workflow"**
+
+*(First build takes ~3-5 min. After that, every push to `main` auto-deploys.)*
+
+**Step 5 — Verify**
+```bash
+curl https://varos-api.fly.dev/health
+# {"status":"ok","version":"0.1.0","env":"production","llm_available":true,...}
+```
+
+---
+
+### 💻 CLI-based setup (Windows PowerShell)
+
+**Prerequisites**
 1. Install flyctl: `iwr https://fly.io/install.ps1 -useb | iex`
 2. Log in: `flyctl auth login` (opens browser)
-3. (Optional) Install gh CLI for auto-deploy wiring: `winget install GitHub.cli`
+3. (Optional) Install gh CLI: `winget install GitHub.cli`
 
-### One-command deploy (PowerShell)
+**One-command deploy**
 
 ```powershell
 cd varos
