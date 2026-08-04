@@ -27,6 +27,8 @@ def _build_response(result) -> ClassifyResponse:
         gene=result.variant.gene_symbol or "",
         classification=result.classification.value,
         confidence=result.confidence,
+        point_total=result.point_total,
+        posterior_probability=result.posterior_probability,
         criteria_triggered=[
             CriterionResponse(
                 code=c.code,

@@ -13,6 +13,7 @@ from varos.classifiers.acmg import (
     evaluate_pp5,
 )
 from varos.models import (
+    ACMGStrength,
     ClinVarEvidence,
     ComputationalScore,
     GeneInfo,
@@ -80,6 +81,13 @@ def test_pm2_not_triggered_moderate_frequency():
     assert crit.triggered is False
 
 
+def test_pm2_applied_at_supporting_strength():
+    """SVI 2020: PM2 is applied at Supporting, not Moderate, by default."""
+    crit = evaluate_pm2(None)
+    assert crit.applied_strength == ACMGStrength.SUPPORTING
+    assert crit.default_strength == ACMGStrength.SUPPORTING
+
+
 # --- BS1 ---
 
 def test_bs1_triggers_above_expected():
@@ -112,6 +120,42 @@ def test_pp3_not_triggered_no_scores():
     assert crit.triggered is False
 
 
+# --- PP3 (REVEL, Pejaver 2022 calibrated tiers) ---
+
+def test_pp3_revel_strong_tier():
+    comp = ComputationalScore(revel_score=0.95)
+    crit = evaluate_pp3(comp)
+    assert crit.triggered is True
+    assert crit.applied_strength == ACMGStrength.STRONG
+
+
+def test_pp3_revel_moderate_tier():
+    comp = ComputationalScore(revel_score=0.8)
+    crit = evaluate_pp3(comp)
+    assert crit.triggered is True
+    assert crit.applied_strength == ACMGStrength.MODERATE
+
+
+def test_pp3_revel_supporting_tier():
+    comp = ComputationalScore(revel_score=0.65)
+    crit = evaluate_pp3(comp)
+    assert crit.triggered is True
+    assert crit.applied_strength == ACMGStrength.SUPPORTING
+
+
+def test_pp3_revel_below_threshold_not_triggered():
+    comp = ComputationalScore(revel_score=0.5)
+    crit = evaluate_pp3(comp)
+    assert crit.triggered is False
+
+
+def test_pp3_prefers_revel_over_alphamissense():
+    """REVEL is the better-calibrated predictor and takes priority."""
+    comp = ComputationalScore(revel_score=0.95, alphamissense_score=0.1, alphamissense_class="ambiguous")
+    crit = evaluate_pp3(comp)
+    assert crit.applied_strength == ACMGStrength.STRONG
+
+
 # --- BP4 (computational benign) ---
 
 def test_bp4_triggers_low_alphamissense():
@@ -122,6 +166,26 @@ def test_bp4_triggers_low_alphamissense():
 
 def test_bp4_not_triggered_high_alphamissense():
     comp = _comp(pathogenicity=0.8)
+    crit = evaluate_bp4(comp)
+    assert crit.triggered is False
+
+
+def test_bp4_revel_moderate_tier():
+    comp = ComputationalScore(revel_score=0.1)
+    crit = evaluate_bp4(comp)
+    assert crit.triggered is True
+    assert crit.applied_strength == ACMGStrength.MODERATE
+
+
+def test_bp4_revel_supporting_tier():
+    comp = ComputationalScore(revel_score=0.25)
+    crit = evaluate_bp4(comp)
+    assert crit.triggered is True
+    assert crit.applied_strength == ACMGStrength.SUPPORTING
+
+
+def test_bp4_revel_above_threshold_not_triggered():
+    comp = ComputationalScore(revel_score=0.5)
     crit = evaluate_bp4(comp)
     assert crit.triggered is False
 

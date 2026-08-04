@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from varos.classifiers.combiner import classify
+from varos.classifiers.combiner import classify, classify_detailed
 from varos.models import (
     ACMGClassification,
     ACMGCriterion,
@@ -49,14 +49,21 @@ def test_pvs1_alone_is_likely_pathogenic():
     assert classification in (ACMGClassification.LIKELY_PATHOGENIC, ACMGClassification.VUS)
 
 
-def test_two_strong_pathogenic_is_pathogenic():
-    """PS1 + PS3 → Pathogenic."""
+def test_two_strong_pathogenic_is_likely_pathogenic():
+    """PS1 + PS3 → Likely Pathogenic under the Tavtigian 2018 point framework.
+
+    Under the original 2015 Richards et al. Table 5 rules, two Strong
+    criteria alone were categorized as Pathogenic. The Bayesian point
+    system (4 + 4 = 8 points) places this combination in the Likely
+    Pathogenic range (6-9) instead — a documented, published divergence
+    between the two frameworks (Tavtigian 2018, Table 4), not a bug.
+    """
     criteria = [
         make_criterion("PS1", ACMGDirection.PATHOGENIC, ACMGStrength.STRONG),
         make_criterion("PS3", ACMGDirection.PATHOGENIC, ACMGStrength.STRONG),
     ]
     classification, _ = classify(criteria)
-    assert classification == ACMGClassification.PATHOGENIC
+    assert classification == ACMGClassification.LIKELY_PATHOGENIC
 
 
 # --- Benign rules ---
@@ -127,3 +134,46 @@ def test_vus_confidence_low():
     ]
     _classification, confidence = classify(criteria)
     assert confidence < 60
+
+
+# --- Bayesian point framework (Tavtigian 2018) ---
+
+def test_point_total_sums_applied_strength():
+    criteria = [
+        make_criterion("PVS1", ACMGDirection.PATHOGENIC, ACMGStrength.VERY_STRONG),  # +8
+        make_criterion("PM2", ACMGDirection.PATHOGENIC, ACMGStrength.SUPPORTING),     # +1
+        make_criterion("BS1", ACMGDirection.BENIGN, ACMGStrength.STRONG),             # -4
+    ]
+    result = classify_detailed(criteria)
+    assert result.point_total == 5
+
+
+def test_posterior_probability_increases_with_points():
+    weak = classify_detailed([make_criterion("PP3", ACMGDirection.PATHOGENIC, ACMGStrength.SUPPORTING)])
+    strong = classify_detailed([make_criterion("PVS1", ACMGDirection.PATHOGENIC, ACMGStrength.VERY_STRONG)])
+    assert 0.0 <= weak.posterior_probability <= 1.0
+    assert 0.0 <= strong.posterior_probability <= 1.0
+    assert strong.posterior_probability > weak.posterior_probability
+
+
+def test_ba1_weighted_as_very_strong_benign():
+    """BA1 alone (-8 points) reaches the Benign point range on its own."""
+    result = classify_detailed([make_criterion("BA1", ACMGDirection.BENIGN, ACMGStrength.STRONG)])
+    assert result.point_total == -8
+    assert result.classification == ACMGClassification.BENIGN
+
+
+def test_pathogenic_requires_ten_points():
+    nine_points = classify_detailed([
+        make_criterion("PVS1", ACMGDirection.PATHOGENIC, ACMGStrength.VERY_STRONG),  # 8
+        make_criterion("PP3", ACMGDirection.PATHOGENIC, ACMGStrength.SUPPORTING),     # 1
+    ])
+    assert nine_points.point_total == 9
+    assert nine_points.classification == ACMGClassification.LIKELY_PATHOGENIC
+
+    ten_points = classify_detailed([
+        make_criterion("PVS1", ACMGDirection.PATHOGENIC, ACMGStrength.VERY_STRONG),  # 8
+        make_criterion("PM2", ACMGDirection.PATHOGENIC, ACMGStrength.MODERATE),       # 2
+    ])
+    assert ten_points.point_total == 10
+    assert ten_points.classification == ACMGClassification.PATHOGENIC

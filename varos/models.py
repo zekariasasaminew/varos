@@ -152,6 +152,8 @@ class ClassificationResult(BaseModel):
     variant: NormalizedVariant
     classification: ACMGClassification
     confidence: int = Field(ge=0, le=100)   # 0-100
+    point_total: int = 0                    # Tavtigian 2018 Bayesian point total
+    posterior_probability: float = Field(0.0, ge=0.0, le=1.0)  # P(pathogenic)
     criteria_triggered: list[ACMGCriterion] = Field(default_factory=list)
     criteria_evaluated: list[ACMGCriterion] = Field(default_factory=list)
 

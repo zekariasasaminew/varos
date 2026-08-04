@@ -20,7 +20,7 @@ import httpx
 from varos.config import settings
 from varos.connectors import gnomad, clinvar, pubmed, alphamissense, spliceai
 from varos.classifiers import acmg as acmg_criteria
-from varos.classifiers.combiner import classify as acmg_classify
+from varos.classifiers.combiner import classify_detailed as acmg_classify_detailed
 from varos.models import (
     ACMGCriterion,
     ClassificationResult,
@@ -305,12 +305,14 @@ async def run_classification(variant_input: VariantInput) -> ClassificationResul
         acmg_criteria.evaluate_bs2(pop_freq, None),
         acmg_criteria.evaluate_bp4(comp_scores),
     ]
-    classification, confidence = acmg_classify(criteria)
+    combiner_result = acmg_classify_detailed(criteria)
 
     result = ClassificationResult(
         variant=norm,
-        classification=classification,
-        confidence=confidence,
+        classification=combiner_result.classification,
+        confidence=combiner_result.confidence,
+        point_total=combiner_result.point_total,
+        posterior_probability=combiner_result.posterior_probability,
         criteria_evaluated=criteria,
         criteria_triggered=[c for c in criteria if c.triggered],
         population_frequency=pop_freq,

@@ -98,6 +98,8 @@ class ClassifyResponse(BaseModel):
         description="ACMG/AMP 2015 classification: `Pathogenic`, `Likely Pathogenic`, `VUS`, `Likely Benign`, or `Benign`.",
     )
     confidence: int = Field(..., ge=0, le=100, description="Confidence score 0-100. Higher = more evidence supporting the classification.")
+    point_total: int = Field(0, description="Tavtigian 2018 Bayesian point total (PMID 29300386). Positive = pathogenic-leaning, negative = benign-leaning.")
+    posterior_probability: float = Field(0.0, ge=0.0, le=1.0, description="Posterior probability of pathogenicity, derived from point_total via the OddsPath formula.")
     criteria_triggered: list[CriterionResponse] = Field(..., description="ACMG criteria that were triggered and contributed to the classification.")
     population_frequency: Optional[float] = Field(None, description="Allele frequency from gnomAD v4.1 (if available).")
     clinvar_classification: Optional[str] = Field(None, description="ClinVar aggregate classification (if variant is in ClinVar).")
