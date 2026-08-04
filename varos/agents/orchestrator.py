@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 
 from varos.config import settings
-from varos.connectors import gnomad, clinvar, pubmed, alphamissense, spliceai
+from varos.connectors import gnomad, clinvar, pubmed, alphamissense, spliceai, ensembl
 from varos.classifiers import acmg as acmg_criteria
 from varos.classifiers.combiner import classify_detailed as acmg_classify_detailed
 from varos.models import (
@@ -30,6 +30,7 @@ from varos.models import (
     PopulationFrequency,
     ClinVarEvidence,
     LiteratureEvidence,
+    TranscriptAnnotation,
     VariantInput,
 )
 
@@ -221,6 +222,23 @@ async def _safe_computational(norm: NormalizedVariant) -> tuple[ComputationalSco
     return scores, ("; ".join(errors) if errors else None)
 
 
+async def _safe_annotation(norm: NormalizedVariant) -> tuple[TranscriptAnnotation | None, str | None]:
+    """Fetch transcript/exon/CDS annotation for PVS1 (NMD + exon-skip analysis).
+
+    Best-effort: PVS1 falls back to its coarser variant-type heuristic when
+    this is unavailable, so a failure here is a warning, not a hard error.
+    """
+    if not norm.hgvs_cdna:
+        return None, None
+    try:
+        annotation = await ensembl.annotate_transcript(
+            norm.hgvs_cdna, norm.transcript or None, norm.genome_build
+        )
+        return annotation, None
+    except Exception as e:
+        return None, f"Ensembl annotation: {e}"
+
+
 # ---------------------------------------------------------------------------
 # LLM reasoning
 # ---------------------------------------------------------------------------
@@ -283,20 +301,27 @@ async def run_classification(variant_input: VariantInput) -> ClassificationResul
     warnings: list[str] = []
 
     # Step 2: parallel evidence gathering
-    (pop_freq, e1), (clinvar_ev, e2), (lit_ev, e3), (comp_scores, e4) = await asyncio.gather(
+    (
+        (pop_freq, e1),
+        (clinvar_ev, e2),
+        (lit_ev, e3),
+        (comp_scores, e4),
+        (annotation, e5),
+    ) = await asyncio.gather(
         _safe_gnomad(norm),
         _safe_clinvar(norm),
         _safe_pubmed(norm),
         _safe_computational(norm),
+        _safe_annotation(norm),
     )
-    for err in [e1, e2, e3, e4]:
+    for err in [e1, e2, e3, e4, e5]:
         if err:
             warnings.append(err)
 
     # Step 3: ACMG classification
     splice_delta = comp_scores.spliceai_max_delta if comp_scores else 0.0
     criteria: list[ACMGCriterion] = [
-        acmg_criteria.evaluate_pvs1(norm, None, splice_delta or 0.0),
+        acmg_criteria.evaluate_pvs1(norm, None, splice_delta or 0.0, annotation),
         acmg_criteria.evaluate_pm2(pop_freq),
         acmg_criteria.evaluate_pp3(comp_scores),
         acmg_criteria.evaluate_pp5(clinvar_ev),

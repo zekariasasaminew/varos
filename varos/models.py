@@ -73,6 +73,30 @@ class ClinVarEvidence(BaseModel):
     not_found: bool = False
 
 
+class TranscriptAnnotation(BaseModel):
+    """Transcript/exon/CDS context from Ensembl VEP + transcript lookup.
+
+    Used by PVS1 to predict nonsense-mediated decay (NMD) and exon-skipping
+    outcomes instead of a bare variant-type substring match. All fields are
+    optional because upstream annotation calls can fail or be unavailable;
+    callers must treat a missing field as "unknown", not "false".
+    """
+    source: str = "Ensembl VEP"
+    transcript_id: str | None = None
+    is_mane_select: bool = False
+    consequence_terms: list[str] = Field(default_factory=list)
+    exon_number: int | None = None        # 1-based rank of the affected/adjacent exon
+    total_exons: int | None = None
+    cds_position: int | None = None       # 1-based nt offset of the variant within the CDS
+    cds_length: int | None = None         # total CDS length in nt, including the stop codon
+    protein_position: int | None = None
+    protein_length: int | None = None     # length in amino acids, excluding the stop
+    skipped_exon_length_nt: int | None = None  # genomic length of the exon predicted skipped
+    hgvsc: str | None = None
+    hgvsp: str | None = None
+    not_found: bool = False
+
+
 class ComputationalScore(BaseModel):
     """Pathogenicity prediction scores."""
     alphamissense_score: float | None = None      # 0-1, >0.564 = likely pathogenic

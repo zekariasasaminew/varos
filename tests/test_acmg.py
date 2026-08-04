@@ -19,6 +19,7 @@ from varos.models import (
     GeneInfo,
     NormalizedVariant,
     PopulationFrequency,
+    TranscriptAnnotation,
 )
 
 
@@ -223,6 +224,113 @@ def test_pvs1_not_triggered_tolerant_gene():
     )
     crit = evaluate_pvs1(variant, _gene(lof_intolerant=False))
     assert crit.triggered is False
+
+
+# --- PVS1 (NMD / exon-skip flowchart, via TranscriptAnnotation) ---
+
+def _frameshift_variant() -> NormalizedVariant:
+    return NormalizedVariant(
+        hgvs_cdna="NM_007294.4:c.5266dupC",
+        gene_symbol="BRCA1",
+        transcript="NM_007294.4",
+        variant_type="frameshift",
+    )
+
+
+def test_pvs1_full_strength_when_not_last_exon():
+    annotation = TranscriptAnnotation(
+        exon_number=8, total_exons=23, cds_position=1000, cds_length=5592,
+    )
+    crit = evaluate_pvs1(_frameshift_variant(), _gene(lof_intolerant=True), annotation=annotation)
+    assert crit.triggered is True
+    assert crit.applied_strength == ACMGStrength.VERY_STRONG
+
+
+def test_pvs1_downgraded_in_last_exon():
+    """PTC in the last exon escapes NMD — downgraded from Very Strong."""
+    annotation = TranscriptAnnotation(
+        exon_number=23, total_exons=23, cds_position=5000, cds_length=5592,
+    )
+    crit = evaluate_pvs1(_frameshift_variant(), _gene(lof_intolerant=True), annotation=annotation)
+    assert crit.triggered is True
+    assert crit.applied_strength in (ACMGStrength.STRONG, ACMGStrength.MODERATE)
+
+
+def test_pvs1_downgraded_to_moderate_for_small_truncation_in_last_exon():
+    """PTC in the last exon AND truncating <10% of the protein → Moderate."""
+    annotation = TranscriptAnnotation(
+        exon_number=23, total_exons=23, cds_position=5500, cds_length=5592,  # ~98% through CDS
+    )
+    crit = evaluate_pvs1(_frameshift_variant(), _gene(lof_intolerant=True), annotation=annotation)
+    assert crit.applied_strength == ACMGStrength.MODERATE
+
+
+def test_pvs1_downgraded_within_50nt_of_penultimate_exon_end():
+    """PTC within the last 50nt of the penultimate exon also escapes NMD."""
+    annotation = TranscriptAnnotation(
+        exon_number=22, total_exons=23, cds_position=5560, cds_length=5592,  # 32nt from CDS end
+    )
+    crit = evaluate_pvs1(_frameshift_variant(), _gene(lof_intolerant=True), annotation=annotation)
+    assert crit.applied_strength in (ACMGStrength.STRONG, ACMGStrength.MODERATE)
+
+
+def test_pvs1_not_downgraded_far_from_penultimate_exon_end():
+    """PTC in the penultimate exon but >50nt from its end → still full strength."""
+    annotation = TranscriptAnnotation(
+        exon_number=22, total_exons=23, cds_position=5000, cds_length=5592,  # 592nt from CDS end
+    )
+    crit = evaluate_pvs1(_frameshift_variant(), _gene(lof_intolerant=True), annotation=annotation)
+    assert crit.applied_strength == ACMGStrength.VERY_STRONG
+
+
+def test_pvs1_splice_in_frame_skip_capped_at_strong():
+    variant = NormalizedVariant(
+        hgvs_cdna="NM_007294.4:c.999+1G>A",
+        gene_symbol="BRCA1",
+        transcript="NM_007294.4",
+        variant_type="splice_donor",
+    )
+    annotation = TranscriptAnnotation(
+        exon_number=5, total_exons=23, skipped_exon_length_nt=90,  # divisible by 3
+    )
+    crit = evaluate_pvs1(variant, _gene(lof_intolerant=True), spliceai_max_delta=0.8, annotation=annotation)
+    assert crit.triggered is True
+    assert crit.applied_strength == ACMGStrength.STRONG
+
+
+def test_pvs1_splice_out_of_frame_skip_treated_as_frameshift():
+    variant = NormalizedVariant(
+        hgvs_cdna="NM_007294.4:c.999+1G>A",
+        gene_symbol="BRCA1",
+        transcript="NM_007294.4",
+        variant_type="splice_donor",
+    )
+    annotation = TranscriptAnnotation(
+        exon_number=5, total_exons=23, skipped_exon_length_nt=91,  # not divisible by 3
+        cds_position=1000, cds_length=5592,
+    )
+    crit = evaluate_pvs1(variant, _gene(lof_intolerant=True), spliceai_max_delta=0.8, annotation=annotation)
+    assert crit.triggered is True
+    assert crit.applied_strength == ACMGStrength.VERY_STRONG
+
+
+def test_pvs1_start_loss_applied_at_moderate():
+    variant = NormalizedVariant(
+        hgvs_cdna="NM_007294.4:c.1A>G",
+        gene_symbol="BRCA1",
+        transcript="NM_007294.4",
+        variant_type="start_lost",
+    )
+    annotation = TranscriptAnnotation(consequence_terms=["start_lost"])
+    crit = evaluate_pvs1(variant, _gene(lof_intolerant=True), annotation=annotation)
+    assert crit.triggered is True
+    assert crit.applied_strength == ACMGStrength.MODERATE
+
+
+def test_pvs1_no_annotation_falls_back_to_full_strength():
+    crit = evaluate_pvs1(_frameshift_variant(), _gene(lof_intolerant=True), annotation=None)
+    assert crit.triggered is True
+    assert crit.applied_strength == ACMGStrength.VERY_STRONG
 
 
 # --- PP5 ---

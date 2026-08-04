@@ -20,47 +20,205 @@ from varos.models import (
     PopulationFrequency,
     ClinVarEvidence,
     LiteratureEvidence,
+    TranscriptAnnotation,
 )
 
 # ---------------------------------------------------------------------------
 # Pathogenic criteria
 # ---------------------------------------------------------------------------
 
+_NMD_LAST_EXON_WINDOW_NT = 50  # SVI PVS1: PTC in last 50nt of penultimate exon escapes NMD
+_SMALL_TRUNCATION_FRACTION = 0.10  # SVI PVS1: removing <10% of the protein is a downgrade signal
+
+
+def _nmd_escape_reason(annotation: TranscriptAnnotation) -> str | None:
+    """Return a reason string if the PTC is predicted to escape NMD, else None.
+
+    Per Abou Tayoun et al. 2018 (PMID 30192042): a premature termination
+    codon (PTC) escapes nonsense-mediated decay, and so produces a stable
+    truncated protein rather than triggering transcript degradation, when
+    it falls in the last exon, or within the last 50 nt of the penultimate
+    exon.
+    """
+    if annotation.exon_number is None or annotation.total_exons is None:
+        return None
+    if annotation.exon_number == annotation.total_exons:
+        return "PTC in the last exon"
+    is_penultimate = annotation.exon_number == annotation.total_exons - 1
+    if (
+        is_penultimate
+        and annotation.cds_length
+        and annotation.cds_position
+        and (annotation.cds_length - annotation.cds_position) <= _NMD_LAST_EXON_WINDOW_NT
+    ):
+        return f"PTC within the last {_NMD_LAST_EXON_WINDOW_NT} nt of the penultimate exon"
+    return None
+
+
+def _truncation_fraction(annotation: TranscriptAnnotation) -> float | None:
+    if not annotation.cds_length or not annotation.cds_position:
+        return None
+    return 1.0 - (annotation.cds_position / annotation.cds_length)
+
+
+def _pvs1_for_truncating_variant(annotation: TranscriptAnnotation) -> tuple[ACMGStrength, str]:
+    """PVS1 strength for a variant that produces a premature termination codon
+    (nonsense, frameshift, or an out-of-frame exon skip)."""
+    escape_reason = _nmd_escape_reason(annotation)
+    if escape_reason is None:
+        return ACMGStrength.VERY_STRONG, (
+            f"PTC in exon {annotation.exon_number}/{annotation.total_exons} — NMD predicted "
+            "(not in the last exon or the last 50nt of the penultimate exon)."
+        )
+
+    frac = _truncation_fraction(annotation)
+    if frac is not None and frac < _SMALL_TRUNCATION_FRACTION:
+        strength = ACMGStrength.MODERATE
+        frac_text = f"; truncates only ~{frac:.0%} of the protein"
+    else:
+        strength = ACMGStrength.STRONG
+        frac_text = f"; truncates ~{frac:.0%} of the protein" if frac is not None else ""
+    return strength, (
+        f"{escape_reason} — NMD escape predicted, stable truncated protein likely{frac_text}."
+    )
+
+
+def _pvs1_for_splice_variant(
+    annotation: TranscriptAnnotation, spliceai_max_delta: float
+) -> tuple[ACMGStrength, str] | None:
+    """PVS1 strength for a canonical splice-site variant, via predicted exon
+    skipping. Returns None if we can't determine in-frame vs. frameshift.
+    """
+    if annotation.skipped_exon_length_nt is None:
+        return None
+    in_frame = annotation.skipped_exon_length_nt % 3 == 0
+    if in_frame:
+        # In-frame exon skipping does not, on its own, meet PVS1_VeryStrong —
+        # the SVI spec requires checking whether the skipped exon overlaps a
+        # functionally critical domain, which we don't have data for here.
+        # Cap at Strong rather than claim a precision we don't have.
+        return ACMGStrength.STRONG, (
+            f"Canonical splice variant predicts in-frame skipping of a "
+            f"{annotation.skipped_exon_length_nt}nt exon (SpliceAI Δ={spliceai_max_delta:.2f}). "
+            "Critical-domain-overlap analysis is not implemented, so this is capped at "
+            "Strong rather than Very Strong — see docs for this known limitation."
+        )
+    # Out-of-frame skip — treat like any other frameshift/PTC-producing event.
+    strength, reason = _pvs1_for_truncating_variant(annotation)
+    return strength, (
+        f"Canonical splice variant predicts out-of-frame skipping of a "
+        f"{annotation.skipped_exon_length_nt}nt exon (frameshift). {reason}"
+    )
+
+
 def evaluate_pvs1(
     variant: NormalizedVariant,
     gene_info: GeneInfo | None,
     spliceai_max_delta: float = 0.0,
+    annotation: TranscriptAnnotation | None = None,
 ) -> ACMGCriterion:
     """PVS1 — Null variant (frameshift, nonsense, splice ±1/2, initiation codon, exon deletion)
     in a gene where LOF is a known disease mechanism.
+
+    Strength follows the ClinGen SVI PVS1 decision tree (Abou Tayoun et al.
+    2018, PMID 30192042) when transcript/exon annotation is available:
+    nonsense-mediated decay (NMD) escape (last exon, or last 50nt of the
+    penultimate exon) and small (<10%) truncations downgrade from Very
+    Strong to Strong or Moderate; in-frame exon skipping is capped at
+    Strong pending a critical-domain-overlap check we don't implement.
+    Start-loss is applied at Moderate — alternative in-frame start codon
+    analysis (within 25 codons downstream, per the spec) is not
+    implemented, so this is a conservative default rather than a full
+    flowchart evaluation.
+
+    Without annotation (Ensembl lookup failed or wasn't attempted), this
+    falls back to the coarser variant-type/SpliceAI heuristic at full
+    Very Strong strength, same as before — an honest "unknown" rather
+    than a guessed downgrade.
     """
-    triggered = False
-    evidence_parts = []
-
+    consequence_terms = set(annotation.consequence_terms) if annotation else set()
+    lof_terms = {
+        "frameshift_variant", "stop_gained", "splice_donor_variant",
+        "splice_acceptor_variant", "start_lost", "transcript_ablation",
+    }
     lof_types = {"frameshift", "nonsense", "stop_gained", "splice_donor", "splice_acceptor", "start_lost"}
-    if variant.variant_type and any(t in variant.variant_type.lower() for t in lof_types):
-        triggered = True
-        evidence_parts.append(f"Variant type is {variant.variant_type!r} (predicted loss-of-function)")
 
-    if spliceai_max_delta >= 0.5 and not triggered:
-        triggered = True
-        evidence_parts.append(f"SpliceAI max delta score {spliceai_max_delta:.3f} ≥ 0.5 (strong splice impact)")
+    is_lof_by_annotation = bool(consequence_terms & lof_terms)
+    is_lof_by_heuristic = bool(
+        variant.variant_type and any(t in variant.variant_type.lower() for t in lof_types)
+    )
+    is_splice_signal = spliceai_max_delta >= 0.5
 
-    if triggered and gene_info and not gene_info.is_lof_intolerant:
-        # Downgrade if gene is not LOF intolerant (pLI < 0.9)
-        triggered = False
-        evidence_parts.append(
-            f"Note: Gene {gene_info.gene_symbol} has pLI={gene_info.pli_score or "unknown"} (<0.9), "
-            "LOF tolerance reduces PVS1 applicability"
+    triggered = is_lof_by_annotation or is_lof_by_heuristic or is_splice_signal
+    if not triggered:
+        return ACMGCriterion(
+            code="PVS1",
+            direction=ACMGDirection.PATHOGENIC,
+            default_strength=ACMGStrength.VERY_STRONG,
+            applied_strength=ACMGStrength.VERY_STRONG,
+            triggered=False,
+            evidence_text="No null variant type detected.",
+            citations=["PMID:25741868", "PMID:30192042"],
         )
+
+    if gene_info and not gene_info.is_lof_intolerant:
+        return ACMGCriterion(
+            code="PVS1",
+            direction=ACMGDirection.PATHOGENIC,
+            default_strength=ACMGStrength.VERY_STRONG,
+            applied_strength=ACMGStrength.VERY_STRONG,
+            triggered=False,
+            evidence_text=(
+                f"Note: Gene {gene_info.gene_symbol} has pLI={gene_info.pli_score or 'unknown'} "
+                "(<0.9); LOF tolerance reduces PVS1 applicability."
+            ),
+            citations=["PMID:25741868", "PMID:30192042"],
+        )
+
+    strength = ACMGStrength.VERY_STRONG
+    evidence: str
+
+    is_start_loss = "start_lost" in consequence_terms or (
+        variant.variant_type and "start_lost" in variant.variant_type.lower()
+    )
+    is_splice_consequence = bool(
+        consequence_terms & {"splice_donor_variant", "splice_acceptor_variant"}
+    ) or (variant.variant_type and any(
+        t in variant.variant_type.lower() for t in ("splice_donor", "splice_acceptor")
+    ))
+
+    if annotation is None or annotation.not_found:
+        evidence = (
+            f"Variant type is {variant.variant_type!r} (predicted loss-of-function). "
+            "No transcript/exon annotation available — NMD and exon-skipping analysis "
+            "could not be performed; defaulting to full PVS1_VeryStrong."
+        )
+    elif is_start_loss:
+        strength = ACMGStrength.MODERATE
+        evidence = (
+            "Start-loss variant. Alternative in-frame start codon analysis is not "
+            "implemented — defaulting to PVS1_Moderate rather than assuming full strength."
+        )
+    elif is_splice_consequence:
+        splice_result = _pvs1_for_splice_variant(annotation, spliceai_max_delta)
+        if splice_result is None:
+            evidence = (
+                f"Canonical splice variant (SpliceAI Δ={spliceai_max_delta:.2f}). "
+                "Skipped-exon length unavailable — could not determine in-frame vs. "
+                "frameshift outcome; defaulting to full PVS1_VeryStrong."
+            )
+        else:
+            strength, evidence = splice_result
+    else:
+        strength, evidence = _pvs1_for_truncating_variant(annotation)
 
     return ACMGCriterion(
         code="PVS1",
         direction=ACMGDirection.PATHOGENIC,
         default_strength=ACMGStrength.VERY_STRONG,
-        applied_strength=ACMGStrength.VERY_STRONG,
-        triggered=triggered,
-        evidence_text=" | ".join(evidence_parts) if evidence_parts else "No null variant type detected.",
+        applied_strength=strength,
+        triggered=True,
+        evidence_text=evidence,
         citations=["PMID:25741868", "PMID:30192042"],
     )
 
