@@ -8,12 +8,27 @@ from rich.console import Console
 app = typer.Typer(
     name="varos",
     help="[bold blue]VAROS[/] — Variant Autonomous Reclassification & Observation System\n\n"
-         "Classify genetic variants using ACMG/AMP guidelines + AI evidence synthesis.",
+         "Classify genetic variants using ACMG/AMP guidelines + AI evidence synthesis.\n\n"
+         "[bold yellow]RESEARCH USE ONLY — NOT FOR DIAGNOSTIC USE.[/] Classifications are not "
+         "clinically validated; review with a qualified clinical geneticist before acting on them.",
     rich_markup_mode="rich",
     no_args_is_help=True,
     pretty_exceptions_enable=True,
 )
 console = Console()
+
+
+def _print_ruo_banner() -> None:
+    console.print(
+        "[bold yellow]RESEARCH USE ONLY — NOT FOR DIAGNOSTIC USE.[/] "
+        "VAROS classifications are not clinically validated."
+    )
+
+
+@app.callback(invoke_without_command=False)
+def _startup() -> None:
+    """Print the RUO banner before any subcommand runs."""
+    _print_ruo_banner()
 
 # Import sub-commands
 from varos.cli.classify import classify_cmd  # noqa: E402

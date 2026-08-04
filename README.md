@@ -9,6 +9,10 @@ Built for clinical genomics labs, pharma drug discovery teams, and bioinformatic
 [![API](https://img.shields.io/badge/API-FastAPI-009688)](#rest-api)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
+> ⚠️ **Research Use Only. Not for diagnostic use.** VAROS is a pre-clinical research tool. Its classifications
+> have not been clinically validated and must not be used to make patient care decisions without independent
+> review and confirmation by a qualified clinical geneticist.
+
 ---
 
 ## What VAROS Does
